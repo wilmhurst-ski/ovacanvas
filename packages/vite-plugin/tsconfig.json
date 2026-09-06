@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "outDir": "lib",
+    "strict": true,
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "target": "es2021",
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "declaration": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "plugins": [
+      {
+        "transform": "@ovacanvas/internal/transformers/markdown-literals.js"
+      }
+    ]
+  },
+  "include": ["src"]
+}

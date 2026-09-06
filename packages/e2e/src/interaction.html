@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>OvaCanvas CAP-01 interaction regression</title>
+    <style>
+      body {
+        margin: 0;
+        background: #15171c;
+        color: #fff;
+        font: 12px monospace;
+      }
+      main {
+        padding: 10px;
+      }
+      #stages {
+        display: flex;
+        gap: 8px;
+      }
+      canvas {
+        width: 400px;
+        height: 400px;
+        background: #101216;
+        display: block;
+      }
+      pre {
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="stages"></div>
+      <pre id="status">booting</pre>
+    </main>
+    <script type="module" src="/interaction.ts"></script>
+  </body>
+</html>

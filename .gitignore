@@ -1,0 +1,12 @@
+node_modules
+
+/packages/*/dist
+/packages/*/editor
+/packages/*/lib
+/packages/*/static
+/packages/*/build
+/packages/*/output
+
+.idea
+.nx/cache
+.nx/workspace-data

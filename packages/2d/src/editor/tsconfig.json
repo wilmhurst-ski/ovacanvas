@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "paths": {
+      "@ovacanvas/2d": ["../lib"]
+    }
+  },
+  "references": [{"path": "../lib/tsconfig.json"}],
+  "include": ["**/*"]
+}

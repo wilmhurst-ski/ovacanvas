@@ -1,0 +1,29 @@
+{
+  "name": "@ovacanvas/player",
+  "version": "3.17.2",
+  "description": "A custom element for displaying OvaCanvas scenes in a browser",
+  "main": "dist/main.js",
+  "types": "types/main.d.ts",
+  "author": "OvaCanvas contributors",
+  "homepage": "https://github.com/wilmhurst-ski/ovacanvas",
+  "bugs": "https://github.com/wilmhurst-ski/ovacanvas/issues",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wilmhurst-ski/ovacanvas.git"
+  },
+  "files": [
+    "dist",
+    "types"
+  ],
+  "devDependencies": {
+    "@ovacanvas/core": "^3.17.2",
+    "sass": "^1.58.0",
+    "terser": "^5.16.1"
+  }
+}

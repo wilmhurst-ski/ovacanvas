@@ -1,0 +1,46 @@
+.root {
+  display: flex;
+  flex-grow: 0;
+  flex-shrink: 0;
+  justify-content: space-between;
+  width: 100%;
+  height: 26px;
+  padding: 4px;
+  gap: 4px;
+  grid-area: footer;
+  border-top: 2px solid var(--border-color);
+  font-size: var(--font-size-small);
+  line-height: 16px;
+}
+
+.shortcuts {
+  flex-grow: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.action {
+  color: var(--theme);
+  font-weight: bold;
+  margin-left: 4px;
+}
+
+.shortcut {
+  display: flex;
+
+  &:not(:last-child) {
+    border-right: 2px solid var(--surface-color);
+    padding-right: 8px;
+    margin-right: 8px;
+  }
+  .key {
+    background-color: var(--surface-color-hover);
+    font-weight: bold;
+    border-radius: var(--radius);
+    margin-right: 4px;
+    padding: 0 4px;
+  }
+  .description {
+    white-space: nowrap;
+  }
+}

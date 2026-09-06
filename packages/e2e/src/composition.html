@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>OvaCanvas interaction + transition composition</title>
+    <style>
+      body {
+        margin: 0;
+        background: #15171c;
+        color: #fff;
+        font: 12px monospace;
+      }
+      main {
+        padding: 10px;
+      }
+      #stages {
+        display: flex;
+        gap: 8px;
+      }
+      .slot {
+        position: relative;
+        width: 320px;
+        height: 320px;
+      }
+      .presentation {
+        position: absolute;
+        inset: 0;
+      }
+      canvas {
+        width: 320px;
+        height: 320px;
+        background: #101216;
+        display: block;
+      }
+      pre {
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="stages"></div>
+      <pre id="status">booting</pre>
+    </main>
+    <script type="module" src="/composition.ts"></script>
+  </body>
+</html>

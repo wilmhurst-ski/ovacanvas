@@ -1,0 +1,7 @@
+{
+  "extends": "@ovacanvas/core/tsconfig.project.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@ovacanvas/2d/lib"
+  }
+}

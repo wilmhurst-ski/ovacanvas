@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "@ovacanvas/2d/src/lib",
+    "plugins": [
+      {
+        "transform": "@ovacanvas/internal/transformers/markdown-literals.js"
+      }
+    ]
+  },
+  "include": ["**/*"]
+}

@@ -1,0 +1,7 @@
+{
+  "extends": "@ovacanvas/2d/tsconfig.project.json",
+  "compilerOptions": {
+    "skipLibCheck": true
+  },
+  "include": ["src", "tests", "foundation", "interaction", "learner"]
+}

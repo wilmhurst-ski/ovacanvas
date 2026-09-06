@@ -1,0 +1,52 @@
+{
+  "name": "ovacanvas",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "core:dev": "npm run dev -w packages/core",
+    "core:build": "npm run build -w packages/core",
+    "core:bundle": "npm run bundle -w packages/core",
+    "core:test": "npm run test -w packages/core",
+    "2d:dev": "npm run dev -w packages/2d",
+    "2d:build": "npm run build -w packages/2d",
+    "2d:bundle": "npm run bundle -w packages/2d",
+    "2d:test": "npm run test -w packages/2d",
+    "ui:dev": "npm run dev -w packages/ui",
+    "ui:build": "npm run build -w packages/ui",
+    "ui:showcase": "npm run showcase -w packages/ui",
+    "ui:type": "npm run type -w packages/ui",
+    "template:dev": "npm run dev -w packages/template",
+    "template:build": "npm run build -w packages/template",
+    "player:dev": "npm run dev -w packages/player",
+    "player:build": "npm run build -w packages/player",
+    "vite-plugin:dev": "npm run dev -w packages/vite-plugin",
+    "vite-plugin:build": "npm run build -w packages/vite-plugin",
+    "e2e:test": "npm run test -w packages/e2e",
+    "eslint": "eslint \"**/*.ts?(x)\"",
+    "eslint:fix": "eslint --fix \"**/*.ts?(x)\"",
+    "prettier": "prettier --check .",
+    "prettier:fix": "prettier --write ."
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.4.0",
+    "@commitlint/config-conventional": "^19.2.2",
+    "@typescript-eslint/eslint-plugin": "^6.11.0",
+    "@typescript-eslint/parser": "^6.11.0",
+    "eslint": "^8.54.0",
+    "eslint-plugin-tsdoc": "^0.2.17",
+    "husky": "^9.1.5",
+    "lerna": "^8.1.8",
+    "lint-staged": "^15.2.9",
+    "prettier": "^3.3.3",
+    "prettier-plugin-organize-imports": "^4.0.0",
+    "typescript": "^5.2.2",
+    "rollup": "4.5.0",
+    "vite": "^4.5.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": "eslint --fix",
+    "*.{js,jsx,ts,tsx,md,scss}": "prettier --write"
+  }
+}

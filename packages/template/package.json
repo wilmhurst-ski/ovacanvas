@@ -1,0 +1,21 @@
+{
+  "name": "@ovacanvas/template",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Basic project template for OvaCanvas",
+  "author": "OvaCanvas contributors",
+  "license": "MIT",
+  "main": "src/project.ts",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build"
+  },
+  "dependencies": {
+    "@ovacanvas/core": "*",
+    "@ovacanvas/2d": "*"
+  },
+  "devDependencies": {
+    "@ovacanvas/ui": "*",
+    "@ovacanvas/vite-plugin": "*"
+  }
+}

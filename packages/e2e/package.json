@@ -1,0 +1,27 @@
+{
+  "name": "@ovacanvas/e2e",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "test": "vitest",
+    "test:foundation": "vitest run src/foundation.test.ts src/foundationGeneration.test.ts src/foundationOwners.test.ts src/foundationHmr.test.ts",
+    "test:interaction": "vitest run src/interaction.test.ts",
+    "test:learner": "vitest run src/learner.test.ts",
+    "test:transition": "vitest run src/transition.test.ts",
+    "test:composition": "vitest run src/composition.test.ts",
+    "test:runtime-built": "vitest run src/runtimeBuilt.test.ts"
+  },
+  "dependencies": {
+    "@ovacanvas/2d": "*",
+    "@ovacanvas/core": "*",
+    "jest-image-snapshot": "^6.2.0",
+    "playwright": "^1.46.1",
+    "vitest": "^0.34.6"
+  },
+  "devDependencies": {
+    "@ovacanvas/ui": "*",
+    "@ovacanvas/vite-plugin": "*"
+  }
+}
