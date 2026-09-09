@@ -61,6 +61,20 @@ export interface PreparationContext<TState extends object> {
   markReady(): void;
   /** Whether this preparation has been cancelled and should stop. */
   isCancelled(): boolean;
+  /**
+   * Aborted when this candidate becomes obsolete.
+   *
+   * @remarks
+   * Scoped to one candidate: cancelling a pending candidate never aborts the
+   * presentation that is current, or one that is outgoing. Preparation that
+   * awaits anything cancellable should pass this on, so that abandoning a
+   * candidate unwinds promptly instead of waiting for the work to finish.
+   *
+   * An abort means only that this preparation is obsolete. It is not readiness,
+   * not a failure to recover from, and not a refusal to activate;
+   * {@link isCancelled} remains available for cheap synchronous checkpoints.
+   */
+  readonly signal: AbortSignal;
 }
 
 /**
@@ -73,16 +87,26 @@ export interface PreparationContext<TState extends object> {
  *
  * @internal Not a public API.
  */
-export interface PresentationAdapter<TState extends object, TPresentation> {
+export interface PresentationAdapter<
+  TState extends object,
+  TPresentation,
+  TRequest = void,
+> {
   /**
    * Build a candidate offstage.
    *
    * @remarks
    * Must not make the candidate learner-visible. Whatever it returns is
    * disposable on its own, without touching the presentation that is current.
+   *
+   * `request` is the exact value the host passed to the {@link
+   * TransitionOwner.stage} call that began *this* candidate. It is handed
+   * straight through, so preparation never has to read a mutable "latest
+   * request" slot that a newer staging may already have replaced.
    */
   prepare(
     context: PreparationContext<TState>,
+    request: TRequest,
   ): TPresentation | Promise<TPresentation>;
 
   /**
@@ -202,8 +226,20 @@ export interface TransitionRefused {
  */
 export type TransitionResult = TransitionAccepted | TransitionRefused;
 
-interface CandidateRecord<TState extends object, TPresentation> {
+interface CandidateRecord<TState extends object, TPresentation, TRequest> {
   readonly handle: PreparedGeneration<TState>;
+  /**
+   * What this candidate was staged to prepare.
+   *
+   * @remarks
+   * Captured once, on the record, rather than read from owner state when
+   * preparation runs. A cancelled candidate whose asynchronous work finishes
+   * late therefore still sees the request it was started with, even though a
+   * newer candidate has since been staged with a different one.
+   */
+  readonly request: TRequest;
+  /** Aborted when this candidate becomes obsolete. One per candidate. */
+  readonly abort: AbortController;
   presentation: TPresentation | null;
   ready: boolean;
   cancelled: boolean;
@@ -240,21 +276,30 @@ interface CandidateRecord<TState extends object, TPresentation> {
  * @internal Not a public API. Names, shape and granularity are not frozen,
  *           and no segment, serialization or delivery protocol is implied.
  */
-export class TransitionOwner<TState extends object, TPresentation> {
+export class TransitionOwner<
+  TState extends object,
+  TPresentation,
+  TRequest = void,
+> {
   private readonly authority: RuntimeAuthority<TState>;
-  private readonly adapter: PresentationAdapter<TState, TPresentation>;
+  private readonly adapter: PresentationAdapter<
+    TState,
+    TPresentation,
+    TRequest
+  >;
   private readonly onPhaseChanged?: () => void;
 
   private activePresentation: TPresentation | null = null;
   private activeGenerationId: number | null = null;
   private outgoingPresentation: TPresentation | null = null;
   private outgoingGenerationId: number | null = null;
-  private candidate: CandidateRecord<TState, TPresentation> | null = null;
+  private candidate: CandidateRecord<TState, TPresentation, TRequest> | null =
+    null;
   private disposed = false;
 
   public constructor(options: {
     authority: RuntimeAuthority<TState>;
-    adapter: PresentationAdapter<TState, TPresentation>;
+    adapter: PresentationAdapter<TState, TPresentation, TRequest>;
     onPhaseChanged?: () => void;
   }) {
     this.authority = options.authority;
@@ -309,15 +354,24 @@ export class TransitionOwner<TState extends object, TPresentation> {
    * generation is discarded and the current presentation is left exactly as
    * it was: a failure of the next presentation must not damage the present
    * one.
+   *
+   * @param request - What to prepare. Captured on this candidate's record and
+   *                  passed to its one `prepare` call unchanged. The owner
+   *                  never inspects, copies, compares or caches it, and it
+   *                  confers no authority: the generation the authority issued
+   *                  remains the only identity that can activate. Two equal
+   *                  requests are still two different candidates.
    */
-  public async stage(): Promise<StagingResult> {
+  public async stage(request: TRequest): Promise<StagingResult> {
     if (this.disposed) return refuseStaging('owner-disposed');
     if (this.authority.isDisposed) return refuseStaging('authority-disposed');
     if (this.candidate) return refuseStaging('candidate-in-progress');
 
     const handle = this.authority.prepare();
-    const record: CandidateRecord<TState, TPresentation> = {
+    const record: CandidateRecord<TState, TPresentation, TRequest> = {
       handle,
+      request,
+      abort: new AbortController(),
       presentation: null,
       ready: false,
       cancelled: false,
@@ -336,17 +390,22 @@ export class TransitionOwner<TState extends object, TPresentation> {
         handle.markReady();
       },
       isCancelled: () => record.cancelled || this.disposed,
+      signal: record.abort.signal,
     };
 
     let presentation: TPresentation;
     try {
-      presentation = await this.adapter.prepare(context);
+      presentation = await this.adapter.prepare(context, record.request);
     } catch (error: any) {
+      // An obsolete candidate reports as cancelled however its preparation
+      // ended. Whether it rejected *because* the signal aborted or for some
+      // unrelated reason, the candidate is equally unusable, and deciding
+      // between the two would mean inspecting error shapes.
+      const cancelled = record.cancelled || this.disposed;
       this.abandonCandidate(record, null);
-      return refuseStaging(
-        'preparation-failed',
-        String(error?.message ?? error),
-      );
+      return cancelled
+        ? refuseStaging('cancelled')
+        : refuseStaging('preparation-failed', String(error?.message ?? error));
     }
 
     record.presentation = presentation;
@@ -485,15 +544,23 @@ export class TransitionOwner<TState extends object, TPresentation> {
    *
    * @remarks
    * Safe at any point, including while the adapter is still building: the
-   * preparation sees {@link PreparationContext.isCancelled} and whatever it
-   * eventually returns is disposed instead of kept. A cancelled candidate can
-   * never become visible.
+   * preparation sees {@link PreparationContext.isCancelled}, its
+   * {@link PreparationContext.signal} aborts, and whatever it eventually
+   * returns is disposed instead of kept. A cancelled candidate can never
+   * become visible.
+   *
+   * Only the pending candidate is affected. The current and outgoing
+   * presentations keep their own state, and neither is aborted or released
+   * here.
    */
   public cancelCandidate(): boolean {
     const record = this.candidate;
     if (!record) return false;
     record.cancelled = true;
     record.ready = false;
+    // Flags first, then the signal, so a listener that reacts synchronously
+    // already sees the candidate as cancelled.
+    record.abort.abort();
     // If the adapter is still running, `stage` disposes what it returns.
     if (record.presentation !== null) {
       this.abandonCandidate(record, record.presentation);
@@ -535,9 +602,13 @@ export class TransitionOwner<TState extends object, TPresentation> {
   }
 
   private abandonCandidate(
-    record: CandidateRecord<TState, TPresentation>,
+    record: CandidateRecord<TState, TPresentation, TRequest>,
     presentation: TPresentation | null,
   ): void {
+    // Abort before anything is released, so preparation still awaiting work
+    // unwinds rather than continuing against resources that are going away.
+    // Idempotent: cancelling already aborted this record's controller.
+    record.abort.abort();
     record.handle.discard();
     this.authority.release(record.handle.id);
     if (this.candidate === record) this.candidate = null;

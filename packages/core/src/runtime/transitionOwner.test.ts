@@ -670,3 +670,598 @@ describe('scheduling', () => {
     }
   });
 });
+
+// --- T. IMMUTABLE PER-STAGE REQUEST CAPTURE ---
+
+/** What a host asks for. Opaque to the owner; only the test reads it. */
+interface ProbeRequest {
+  readonly label: string;
+}
+
+/** A promise the test releases by hand, so nothing depends on wall-clock time. */
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(res => {
+    resolve = res;
+  });
+  return {promise, resolve};
+}
+
+/** Rejects when the candidate signal aborts, for abort-aware preparation. */
+function untilAborted(signal: AbortSignal): Promise<never> {
+  return new Promise<never>((_, reject) => {
+    if (signal.aborted) {
+      reject(new Error('probe-aborted'));
+      return;
+    }
+    signal.addEventListener('abort', () => reject(new Error('probe-aborted')));
+  });
+}
+
+interface RequestHarnessOptions {
+  /** Hold preparation until the test releases that request's gate. */
+  gate?: boolean;
+  /** Race the gate against the abort signal, so cancelling rejects at once. */
+  abortAware?: boolean;
+  /** Throw once the gate is released, after any cancellation has happened. */
+  throwAfterGate?: boolean;
+  /** Throw immediately, before any cancellation can happen. */
+  throwImmediately?: boolean;
+  /** Never declare readiness during the normal path. */
+  skipReady?: boolean;
+  /** Declare readiness after the gate, which may be after cancellation. */
+  readyAfterGate?: boolean;
+  /** Throw immediately, but only for this one request label. */
+  failFor?: string;
+  /** Never declare readiness, but only for this one request label. */
+  noReadyFor?: string;
+}
+
+/** An observation of one `prepare` call, recorded when it started. */
+interface PrepareObservation {
+  readonly request: ProbeRequest;
+  readonly generation: number;
+  readonly signal: AbortSignal;
+}
+
+function requestHarness(options: RequestHarnessOptions = {}) {
+  const authority = new RuntimeAuthority<ProbeState>({
+    width: 100,
+    label: 'accepted',
+  });
+  const prepared: PrepareObservation[] = [];
+  /**
+   * Request labels as seen *after* preparation resumed from its await.
+   *
+   * @remarks
+   * This is where the hazard lives. A candidate that suspends and resumes
+   * after a newer one has been staged must still be preparing its own
+   * request; anything read from shared host state at this point would already
+   * have been overwritten.
+   */
+  const resumed: string[] = [];
+  const built: ProbePresentation[] = [];
+  /** Request labels whose candidate signal aborted, in order. */
+  const aborted: string[] = [];
+  const gates = new Map<string, ReturnType<typeof deferred>>();
+  let nextName = 0;
+
+  const gateFor = (label: string) => {
+    let gate = gates.get(label);
+    if (!gate) {
+      gate = deferred();
+      gates.set(label, gate);
+    }
+    return gate;
+  };
+
+  const owner = new TransitionOwner<
+    ProbeState,
+    ProbePresentation,
+    ProbeRequest
+  >({
+    authority,
+    adapter: {
+      async prepare(context, request) {
+        prepared.push({
+          request,
+          generation: context.generation,
+          signal: context.signal,
+        });
+        context.signal.addEventListener('abort', () =>
+          aborted.push(request.label),
+        );
+
+        if (options.throwImmediately || options.failFor === request.label) {
+          throw new Error(`probe-immediate-${request.label}`);
+        }
+        if (options.gate || options.abortAware) {
+          const gate = gateFor(request.label).promise;
+          await (options.abortAware
+            ? Promise.race([gate, untilAborted(context.signal)])
+            : gate);
+        }
+        // Read the request again now that preparation has resumed.
+        resumed.push(request.label);
+
+        if (options.throwAfterGate) {
+          throw new Error(`probe-late-${request.label}`);
+        }
+
+        const presentation = new ProbePresentation(
+          `p${++nextName}`,
+          context.generation,
+          context.capability,
+        );
+        built.push(presentation);
+        const withholdReady =
+          (options.skipReady && !options.readyAfterGate) ||
+          options.noReadyFor === request.label;
+        if (!withholdReady) context.markReady();
+        return presentation;
+      },
+      activate(incoming, outgoing) {
+        incoming.shown = true;
+        if (outgoing) outgoing.shown = true;
+      },
+      dispose(presentation) {
+        presentation.disposed++;
+        presentation.shown = false;
+      },
+    },
+  });
+
+  return {
+    authority,
+    owner,
+    prepared,
+    resumed,
+    built,
+    aborted,
+    /** Let one request's preparation continue. */
+    release(label: string) {
+      gateFor(label).resolve();
+    },
+  };
+}
+
+/** Bring a request-typed owner to one active presentation. */
+async function withActiveRequest(h: ReturnType<typeof requestHarness>) {
+  const pending = h.owner.stage({label: 'initial'});
+  h.release('initial');
+  staged(await pending);
+  transitioned(h.owner.activate());
+  return h.owner.current!;
+}
+
+describe('per-stage request capture', () => {
+  test('preparation receives exactly the request that staged it', async () => {
+    const h = requestHarness();
+    const request = {label: 'first'};
+
+    staged(await h.owner.stage(request));
+
+    expect(h.prepared).toHaveLength(1);
+    // Identity, not a copy: the owner does not clone or normalize requests.
+    expect(h.prepared[0].request).toBe(request);
+  });
+
+  test('a late cancelled preparation still sees its own request', async () => {
+    const h = requestHarness({gate: true});
+    await withActiveRequest(h);
+
+    // B starts and is cancelled while still gated.
+    const pendingB = h.owner.stage({label: 'B'});
+    expect(h.owner.cancelCandidate()).toBe(true);
+
+    // C is staged with a different request before B has settled.
+    const pendingC = h.owner.stage({label: 'C'});
+
+    // Now let both finish, oldest first.
+    h.release('B');
+    h.release('C');
+    expect(refusedStaging(await pendingB).reason).toBe('cancelled');
+    staged(await pendingC);
+
+    // Each preparation saw its own request, and B never observed C's.
+    expect(h.prepared.map(observation => observation.request.label)).toEqual([
+      'initial',
+      'B',
+      'C',
+    ]);
+    // And still saw its own after resuming, which is the point: B resumed
+    // only once C had already been staged with a different request.
+    expect(h.resumed).toEqual(['initial', 'B', 'C']);
+  });
+
+  test('the same request object staged twice yields two generations', async () => {
+    const h = requestHarness();
+    const request = {label: 'reused'};
+
+    const first = staged(await h.owner.stage(request));
+    transitioned(h.owner.activate());
+    const second = staged(await h.owner.stage(request));
+
+    expect(second.generation).not.toBe(first.generation);
+    expect(h.prepared[0].request).toBe(h.prepared[1].request);
+    expect(h.prepared[0].generation).not.toBe(h.prepared[1].generation);
+  });
+
+  test('structurally equal requests are still separate candidates', async () => {
+    const h = requestHarness();
+
+    const first = staged(await h.owner.stage({label: 'same'}));
+    transitioned(h.owner.activate());
+    const second = staged(await h.owner.stage({label: 'same'}));
+
+    expect(h.prepared[0].request).toEqual(h.prepared[1].request);
+    expect(h.prepared[0].request).not.toBe(h.prepared[1].request);
+    expect(second.generation).not.toBe(first.generation);
+  });
+
+  test('a request grants no authority of its own', async () => {
+    const h = requestHarness();
+    const a = await withActiveRequest(h);
+    const revision = h.authority.revision;
+
+    staged(await h.owner.stage({label: 'candidate'}));
+    const candidate = h.owner.pendingCandidate!;
+
+    // Carrying a request does not make a candidate writable or current.
+    expect(candidate.capability.isValid()).toBe(false);
+    expect(() => candidate.write(1)).toThrow();
+    expect(h.owner.current).toBe(a);
+    expect(h.authority.revision).toBe(revision);
+  });
+});
+
+// --- U. CANDIDATE-SCOPED CANCELLATION SIGNAL ---
+
+describe('cancellation signal', () => {
+  test('the signal is live while preparing and aborts on cancellation', async () => {
+    const h = requestHarness({gate: true});
+    const pending = h.owner.stage({label: 'B'});
+
+    expect(h.prepared[0].signal.aborted).toBe(false);
+    expect(h.aborted).toEqual([]);
+
+    h.owner.cancelCandidate();
+
+    expect(h.prepared[0].signal.aborted).toBe(true);
+    expect(h.aborted).toEqual(['B']);
+
+    h.release('B');
+    expect(refusedStaging(await pending).reason).toBe('cancelled');
+  });
+
+  test('abort-aware preparation unwinds at once and reports cancelled', async () => {
+    const h = requestHarness({abortAware: true});
+    const a = await withActiveRequest(h);
+
+    const pending = h.owner.stage({label: 'B'});
+    h.owner.cancelCandidate();
+
+    // The gate is never released: the abort alone ends the preparation.
+    const refused = refusedStaging(await pending);
+    expect(refused.reason).toBe('cancelled');
+    // A rejection caused by the abort must not look like a failure.
+    expect(refused.detail).toBeNull();
+    expect(h.owner.current).toBe(a);
+    expect(a.capability.isValid()).toBe(true);
+  });
+
+  test('cancelling before any work builds no presentation at all', async () => {
+    const h = requestHarness({gate: true});
+    const pending = h.owner.stage({label: 'B'});
+    const observation = h.prepared[0];
+
+    h.owner.cancelCandidate();
+
+    expect(observation.signal.aborted).toBe(true);
+    h.release('B');
+    expect(refusedStaging(await pending).reason).toBe('cancelled');
+    // The gate was released after cancelling, so a presentation was built and
+    // immediately disposed rather than kept.
+    expect(h.built).toHaveLength(1);
+    expect(h.built[0].disposed).toBe(1);
+  });
+
+  test('abort-unaware work that returns late is disposed, not kept', async () => {
+    const h = requestHarness({gate: true});
+    const a = await withActiveRequest(h);
+
+    const pending = h.owner.stage({label: 'B'});
+    h.owner.cancelCandidate();
+    h.release('B');
+
+    expect(refusedStaging(await pending).reason).toBe('cancelled');
+    const late = h.built[h.built.length - 1];
+    expect(late.disposed).toBe(1);
+    expect(late.shown).toBe(false);
+    expect(h.owner.pendingCandidate).toBeNull();
+    expect(h.owner.current).toBe(a);
+  });
+
+  test('disposing the owner during preparation aborts the candidate', async () => {
+    const h = requestHarness({gate: true});
+    const pending = h.owner.stage({label: 'B'});
+
+    h.owner.dispose();
+
+    expect(h.prepared[0].signal.aborted).toBe(true);
+    h.release('B');
+    expect(refusedStaging(await pending).reason).toBe('cancelled');
+  });
+
+  test('an exception before cancellation is a preparation failure', async () => {
+    const h = requestHarness({throwImmediately: true});
+
+    const refused = refusedStaging(await h.owner.stage({label: 'B'}));
+
+    expect(refused.reason).toBe('preparation-failed');
+    expect(refused.detail).toContain('probe-immediate-B');
+  });
+
+  test('an exception after cancellation reports cancelled', async () => {
+    const h = requestHarness({gate: true, throwAfterGate: true});
+    const pending = h.owner.stage({label: 'B'});
+
+    h.owner.cancelCandidate();
+    h.release('B');
+
+    const refused = refusedStaging(await pending);
+    expect(refused.reason).toBe('cancelled');
+    expect(refused.detail).toBeNull();
+  });
+
+  test('readiness declared after cancellation does not make it activatable', async () => {
+    const h = requestHarness({
+      gate: true,
+      skipReady: true,
+      readyAfterGate: true,
+    });
+    const a = await withActiveRequest(h);
+
+    const pending = h.owner.stage({label: 'B'});
+    h.owner.cancelCandidate();
+    h.release('B');
+
+    expect(refusedStaging(await pending).reason).toBe('cancelled');
+    expect(h.owner.status().candidateReady).toBe(false);
+    expect(refusedTransition(h.owner.activate()).reason).toBe('no-candidate');
+    expect(h.owner.current).toBe(a);
+  });
+
+  test('cancelling a candidate does not disturb the visible generations', async () => {
+    const h = requestHarness({gate: true});
+    // A active, then B activated so that A becomes outgoing.
+    await withActiveRequest(h);
+    const pendingB = h.owner.stage({label: 'B'});
+    h.release('B');
+    staged(await pendingB);
+    transitioned(h.owner.activate());
+    const outgoing = h.owner.outgoing!;
+    const current = h.owner.current!;
+    const revision = h.authority.revision;
+
+    // A third candidate is staged and cancelled mid-preparation.
+    const pendingC = h.owner.stage({label: 'C'});
+    h.owner.cancelCandidate();
+    h.release('C');
+    expect(refusedStaging(await pendingC).reason).toBe('cancelled');
+
+    // Only the candidate was aborted.
+    expect(h.aborted).toEqual(['C']);
+    // Neither visible presentation was retired or mutated.
+    expect(h.owner.outgoing).toBe(outgoing);
+    expect(h.owner.current).toBe(current);
+    expect(outgoing.disposed).toBe(0);
+    expect(current.disposed).toBe(0);
+    expect(current.capability.isValid()).toBe(true);
+    expect(outgoing.capability.isValid()).toBe(false);
+    expect(h.authority.revision).toBe(revision);
+    expect(h.owner.status().phase).toBe('overlapping');
+  });
+});
+
+// --- V. CANCELLATION AND RESTAGING RACE ---
+
+describe('cancellation and restaging race', () => {
+  test('a late cancelled candidate cannot corrupt its replacement', async () => {
+    const h = requestHarness({gate: true});
+    const a = await withActiveRequest(h);
+    const revision = h.authority.revision;
+
+    // B starts a gated preparation.
+    const pendingB = h.owner.stage({label: 'B'});
+    const generationB = h.owner.status().candidateGeneration;
+
+    // The host cancels B; its signal aborts immediately.
+    expect(h.owner.cancelCandidate()).toBe(true);
+    expect(h.prepared[1].signal.aborted).toBe(true);
+
+    // C is staged before B's promise has settled.
+    const pendingC = h.owner.stage({label: 'C'});
+    const generationC = h.owner.status().candidateGeneration;
+    expect(generationC).not.toBe(generationB);
+
+    // B settles late and is disposed exactly once.
+    h.release('B');
+    expect(refusedStaging(await pendingB).reason).toBe('cancelled');
+    const lateB = h.built[h.built.length - 1];
+    expect(lateB.disposed).toBe(1);
+
+    // C's record survived B's completion untouched.
+    expect(h.owner.status().candidateGeneration).toBe(generationC);
+
+    // C becomes ready, and A was current the whole time until C activated.
+    h.release('C');
+    staged(await pendingC);
+    const candidateC = h.owner.pendingCandidate!;
+    expect(h.owner.current).toBe(a);
+    transitioned(h.owner.activate());
+    expect(h.owner.current).toBe(candidateC);
+    expect(h.owner.outgoing).toBe(a);
+
+    // Nothing leaked: B's generation is gone and only the two visible
+    // generations remain tracked.
+    expect(h.authority.generationState(generationB!)).toBeNull();
+    expect(h.authority.trackedGenerations).toBe(2);
+    expect(a.capability.isValid()).toBe(false);
+    expect(candidateC.capability.isValid()).toBe(true);
+    expect(h.authority.revision).toBe(revision);
+    expect(h.aborted).toEqual(['B']);
+  });
+
+  test('repeated cancellation and retirement calls stay idempotent', async () => {
+    const h = requestHarness();
+    const a = await withActiveRequest(h);
+    staged(await h.owner.stage({label: 'B'}));
+    transitioned(h.owner.activate());
+    const b = h.owner.current!;
+
+    expect(h.owner.cancelCandidate()).toBe(false);
+    expect(h.owner.cancelCandidate()).toBe(false);
+    expect(h.owner.retireOutgoing()).toBe(true);
+    expect(h.owner.retireOutgoing()).toBe(false);
+    expect(h.owner.retireOutgoing()).toBe(false);
+
+    expect(a.disposed).toBe(1);
+    expect(b.disposed).toBe(0);
+    expect(h.owner.current).toBe(b);
+  });
+});
+
+// --- W. OUTGOING OVERLAP CONTRACT ---
+
+describe('outgoing overlap contract', () => {
+  test('the outgoing presentation stays drawable until it is retired', async () => {
+    const h = requestHarness();
+    const a = await withActiveRequest(h);
+    staged(await h.owner.stage({label: 'B'}));
+    transitioned(h.owner.activate());
+    const b = h.owner.current!;
+
+    // Both are alive and on screen; only authority moved.
+    expect(h.owner.outgoing).toBe(a);
+    expect(a.disposed).toBe(0);
+    expect(a.shown).toBe(true);
+    expect(b.shown).toBe(true);
+    expect(a).not.toBe(b);
+    expect(a.capability.isValid()).toBe(false);
+    expect(b.capability.isValid()).toBe(true);
+    expect(h.owner.status().phase).toBe('overlapping');
+
+    h.owner.retireOutgoing();
+    expect(a.disposed).toBe(1);
+    expect(a.shown).toBe(false);
+    expect(b.disposed).toBe(0);
+  });
+
+  test('a stale outgoing callback cannot mutate the incoming generation', async () => {
+    const h = requestHarness();
+    const a = await withActiveRequest(h);
+    staged(await h.owner.stage({label: 'B'}));
+    transitioned(h.owner.activate());
+    const b = h.owner.current!;
+    const revision = h.authority.revision;
+
+    // While still visible, the outgoing presentation writes nothing.
+    expect(() => a.write(999)).toThrow();
+    expect(h.authority.revision).toBe(revision);
+    expect(h.authority.read().width).not.toBe(999);
+    // The incoming generation is unaffected and still the writer.
+    expect(b.write(42)).toBe(revision + 1);
+    expect(h.authority.read().width).toBe(42);
+    expect(h.authority.activeGeneration).toBe(b.generation);
+  });
+});
+
+// --- X. SEAMLESS PREPARATION ---
+
+describe('seamless preparation', () => {
+  /**
+   * The whole use case in one sequence: the learner keeps the presentation
+   * they have while the next one is built, asked for by an immutable request,
+   * and every way the next one can fail leaves the current one alone.
+   */
+  test('the current presentation survives every way a candidate can fail', async () => {
+    const h = requestHarness({gate: true});
+    const a = await withActiveRequest(h);
+    const revision = h.authority.revision;
+
+    // --- a slow candidate is prepared offstage ---
+    const pendingB = h.owner.stage({label: 'B'});
+
+    // A is reachable, undisposed, on screen and still the only writer.
+    expect(h.owner.current).toBe(a);
+    expect(a.disposed).toBe(0);
+    expect(a.shown).toBe(true);
+    expect(a.capability.isValid()).toBe(true);
+    expect(a.write(101)).toBe(revision + 1);
+    // B is neither current nor outgoing while it prepares.
+    expect(h.owner.pendingCandidate).toBeNull();
+    expect(h.owner.outgoing).toBeNull();
+    expect(h.owner.status().phase).toBe('preparing');
+
+    // --- cancelling it leaves A untouched ---
+    h.owner.cancelCandidate();
+    h.release('B');
+    expect(refusedStaging(await pendingB).reason).toBe('cancelled');
+    expect(h.owner.current).toBe(a);
+    expect(a.disposed).toBe(0);
+    expect(a.capability.isValid()).toBe(true);
+
+    // --- a candidate that throws leaves A untouched ---
+    const thrower = requestHarness({failFor: 'boom'});
+    const throwerActive = await withActiveRequest(thrower);
+    const failed = refusedStaging(await thrower.owner.stage({label: 'boom'}));
+    expect(failed.reason).toBe('preparation-failed');
+    expect(thrower.owner.current).toBe(throwerActive);
+    expect(throwerActive.disposed).toBe(0);
+    expect(throwerActive.capability.isValid()).toBe(true);
+
+    // --- a candidate that never declares readiness leaves A untouched ---
+    const silent = requestHarness({noReadyFor: 'quiet'});
+    const silentActive = await withActiveRequest(silent);
+    const unready = refusedStaging(await silent.owner.stage({label: 'quiet'}));
+    expect(unready.reason).toBe('not-ready');
+    expect(silent.owner.current).toBe(silentActive);
+    expect(silent.owner.pendingCandidate).toBeNull();
+    expect(silentActive.capability.isValid()).toBe(true);
+
+    // --- a ready candidate that went stale is refused at activation ---
+    const pendingStale = h.owner.stage({label: 'stale'});
+    h.release('stale');
+    const stale = staged(await pendingStale);
+    // The learner commits through the presentation they are still using.
+    expect(a.write(202)).toBe(revision + 2);
+    const refused = refusedTransition(h.owner.activate());
+    expect(refused.reason).toBe('stale-revision');
+    expect(refused.preparedAtRevision).toBe(stale.preparedAtRevision);
+    expect(refused.currentRevision).toBe(revision + 2);
+    // A is still current, still writable, and its commit was not rolled back.
+    expect(h.owner.current).toBe(a);
+    expect(a.capability.isValid()).toBe(true);
+    expect(h.authority.read().width).toBe(202);
+
+    // --- and a fresh candidate still activates ---
+    const pendingC = h.owner.stage({label: 'C'});
+    h.release('C');
+    staged(await pendingC);
+    const c = h.owner.pendingCandidate!;
+    transitioned(h.owner.activate());
+
+    expect(h.owner.current).toBe(c);
+    expect(h.owner.outgoing).toBe(a);
+    expect(c.capability.isValid()).toBe(true);
+    expect(a.capability.isValid()).toBe(false);
+    // Every request reached its own preparation, in order.
+    expect(h.prepared.map(observation => observation.request.label)).toEqual([
+      'initial',
+      'B',
+      'stale',
+      'C',
+    ]);
+  });
+});
