@@ -1,4 +1,4 @@
-import {afterEach, beforeEach, describe, expect, test} from 'vitest';
+import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {getAssetReloadSubscriberCount} from '../media';
 import {MetaFile} from '../meta';
 import type {FullSceneDescription} from '../scenes';
@@ -18,6 +18,11 @@ import {bootstrap} from './bootstrap';
  * schedules nothing.
  */
 class ProbeScene extends GeneratorScene<void> {
+  /** Set by a test to park recalculation at a controlled point. */
+  public recalculationGate: Promise<void> | null = null;
+  /** Called once recalculation has actually suspended. */
+  public onRecalculationEntered: (() => void) | null = null;
+
   public getView(): void {
     // No view.
   }
@@ -25,6 +30,32 @@ class ProbeScene extends GeneratorScene<void> {
   protected draw(): void {
     // Nothing to draw.
   }
+
+  public override async recalculate(
+    setFrame: (frame: number) => void,
+  ): Promise<void> {
+    const gate = this.recalculationGate;
+    if (gate) {
+      this.recalculationGate = null;
+      this.onRecalculationEntered?.();
+      await gate;
+      // Deliberately does not resume into real recalculation. What is under
+      // test is what `Player` does at its next checkpoint after an awaited
+      // operation returns, not what a disposed scene does when re-entered.
+      setFrame(0);
+      return;
+    }
+    return super.recalculate(setFrame);
+  }
+}
+
+/** A promise a test resolves by hand. */
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(res => {
+    resolve = res;
+  });
+  return {promise, resolve};
 }
 
 function probeProject(): Project {
@@ -280,5 +311,45 @@ describe('Player scheduling lifecycle', () => {
 
     expect(scheduler.requested).toHaveLength(2);
     expect(active.isDisposed()).toBe(false);
+  });
+
+  test('disposal during a suspended run touches no released resource', async () => {
+    const active = newPlayer();
+    const scene = active.playback.currentScene as ProbeScene;
+
+    // Suspend the run inside the recalculation it performs on its first frame.
+    const gate = deferred();
+    const entered = deferred();
+    scene.recalculationGate = gate.promise;
+    scene.onRecalculationEntered = entered.resolve;
+
+    // Anything the run would touch *after* resuming.
+    const setupPool = vi.spyOn(active.audioPool, 'setupPool');
+    let rendered = 0;
+    active.onRender.subscribe(async () => {
+      rendered++;
+    });
+
+    // Start the frame without awaiting it, then wait for the suspension.
+    const frame = scheduler.requested[0];
+    const running = frame(1000);
+    await entered.promise;
+    expect(setupPool).not.toHaveBeenCalled();
+
+    // The runtime goes away while the run is parked mid-await.
+    active.dispose();
+    gate.resolve();
+    await running;
+
+    // The lifecycle token stopped the run at its next checkpoint: the audio
+    // pool of a disposed player was never reconfigured, nothing was drawn,
+    // and no further frame was scheduled.
+    expect(setupPool).not.toHaveBeenCalled();
+    expect(rendered).toBe(0);
+    expect(scheduler.requested).toHaveLength(1);
+    // The frame that ran cleared itself and queued no replacement.
+    expect(active.isDisposed()).toBe(true);
+    active.dispose();
+    expect(active.isDisposed()).toBe(true);
   });
 });

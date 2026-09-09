@@ -471,7 +471,11 @@ export class TransitionOwner<
       // The authority already discarded the refused generation; the
       // presentation built for it is now unreachable and is released here.
       this.releasePresentation(record.presentation);
-      this.candidate = null;
+      // Discarded is not forgotten. Without this, every refused activation
+      // would leave one more generation tracked until the authority itself
+      // was disposed.
+      this.authority.release(record.handle.id);
+      if (this.candidate === record) this.candidate = null;
       this.onPhaseChanged?.();
       return {
         ok: false,
@@ -566,7 +570,13 @@ export class TransitionOwner<
       this.abandonCandidate(record, record.presentation);
     } else {
       record.handle.discard();
-      this.candidate = null;
+      // Released now, not when the preparation eventually settles. An adapter
+      // that ignores the abort and never settles would otherwise leave this
+      // generation tracked for the lifetime of the authority. Late cleanup
+      // releasing it again is harmless: the authority reports that there was
+      // nothing left to release.
+      this.authority.release(record.handle.id);
+      if (this.candidate === record) this.candidate = null;
       this.onPhaseChanged?.();
     }
     return true;

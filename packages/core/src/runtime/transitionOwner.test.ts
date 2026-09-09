@@ -1265,3 +1265,181 @@ describe('seamless preparation', () => {
     ]);
   });
 });
+
+// --- Y. ABANDONED GENERATIONS ARE RELEASED, NOT MERELY DISCARDED ---
+
+describe('abandoned generation accounting', () => {
+  test('an in-flight cancelled candidate is released before it settles', async () => {
+    const h = requestHarness({gate: true});
+    const a = await withActiveRequest(h);
+    const withActiveOnly = h.authority.trackedGenerations;
+
+    // B begins a gated, abort-unaware preparation.
+    const pendingB = h.owner.stage({label: 'B'});
+    const generationB = h.owner.status().candidateGeneration!;
+    expect(h.authority.trackedGenerations).toBe(withActiveOnly + 1);
+
+    expect(h.owner.cancelCandidate()).toBe(true);
+
+    // Asserted *before* B's gate is released. An adapter that ignores the
+    // abort may never settle, so waiting for it would prove nothing.
+    expect(h.prepared[1].signal.aborted).toBe(true);
+    expect(h.authority.generationState(generationB)).toBeNull();
+    expect(h.authority.trackedGenerations).toBe(withActiveOnly);
+    // The presentation on screen is untouched by any of it.
+    expect(h.owner.current).toBe(a);
+    expect(a.disposed).toBe(0);
+    expect(a.capability.isValid()).toBe(true);
+
+    // C takes the candidate slot while B is still unsettled.
+    const pendingC = h.owner.stage({label: 'C'});
+    const generationC = h.owner.status().candidateGeneration!;
+    expect(generationC).not.toBe(generationB);
+    expect(h.authority.generationState(generationC)).not.toBeNull();
+
+    // B settles late: disposed once, and C is left exactly as it was.
+    h.release('B');
+    expect(refusedStaging(await pendingB).reason).toBe('cancelled');
+    expect(h.built[h.built.length - 1].disposed).toBe(1);
+    expect(h.owner.status().candidateGeneration).toBe(generationC);
+    expect(h.authority.generationState(generationB)).toBeNull();
+
+    // And C still completes normally.
+    h.release('C');
+    staged(await pendingC);
+    const c = h.owner.pendingCandidate!;
+    transitioned(h.owner.activate());
+    expect(h.owner.current).toBe(c);
+    expect(h.owner.outgoing).toBe(a);
+    // Exactly the two visible generations remain.
+    expect(h.authority.trackedGenerations).toBe(2);
+  });
+
+  test('a refused activation releases the generation it discarded', async () => {
+    const h = requestHarness();
+    const a = await withActiveRequest(h);
+    const withActiveOnly = h.authority.trackedGenerations;
+
+    const candidate = staged(await h.owner.stage({label: 'B'}));
+    const generationB = candidate.generation;
+    const b = h.owner.pendingCandidate!;
+    expect(h.authority.trackedGenerations).toBe(withActiveOnly + 1);
+
+    // The learner commits through the presentation they are still using, so
+    // the ready candidate no longer describes current accepted state.
+    const revision = a.write(500);
+
+    const refused = refusedTransition(h.owner.activate());
+
+    // The refusal evidence is unchanged by the release.
+    expect(refused.reason).toBe('stale-revision');
+    expect(refused.preparedAtRevision).toBe(candidate.preparedAtRevision);
+    expect(refused.currentRevision).toBe(revision);
+
+    // Both the presentation and the generation are gone.
+    expect(b.disposed).toBe(1);
+    expect(h.authority.generationState(generationB)).toBeNull();
+    expect(h.authority.trackedGenerations).toBe(withActiveOnly);
+    expect(h.owner.pendingCandidate).toBeNull();
+
+    // A is untouched, still authoritative, and its commit stands.
+    expect(h.owner.current).toBe(a);
+    expect(a.disposed).toBe(0);
+    expect(a.capability.isValid()).toBe(true);
+    expect(h.authority.revision).toBe(revision);
+    expect(h.authority.read().width).toBe(500);
+
+    // A fresh candidate activates, and B never reappears in the accounting.
+    staged(await h.owner.stage({label: 'C'}));
+    transitioned(h.owner.activate());
+    expect(h.authority.generationState(generationB)).toBeNull();
+    expect(h.authority.trackedGenerations).toBe(2);
+  });
+
+  test('repeated activation after a refusal changes nothing', async () => {
+    const h = requestHarness();
+    const a = await withActiveRequest(h);
+    const withActiveOnly = h.authority.trackedGenerations;
+
+    staged(await h.owner.stage({label: 'B'}));
+    a.write(600);
+    expect(refusedTransition(h.owner.activate()).reason).toBe('stale-revision');
+
+    // Nothing is left to activate, and asking again reports that plainly.
+    expect(refusedTransition(h.owner.activate()).reason).toBe('no-candidate');
+    expect(refusedTransition(h.owner.activate()).reason).toBe('no-candidate');
+    expect(h.authority.trackedGenerations).toBe(withActiveOnly);
+    expect(h.owner.current).toBe(a);
+    expect(a.capability.isValid()).toBe(true);
+  });
+
+  test('owner disposal releases an unresolved candidate immediately', async () => {
+    const h = requestHarness({gate: true});
+    await withActiveRequest(h);
+
+    const pending = h.owner.stage({label: 'B'});
+    const generationB = h.owner.status().candidateGeneration!;
+
+    h.owner.dispose();
+
+    // Again before the gate is released.
+    expect(h.prepared[1].signal.aborted).toBe(true);
+    expect(h.authority.generationState(generationB)).toBeNull();
+
+    h.release('B');
+    expect(refusedStaging(await pending).reason).toBe('cancelled');
+    expect(h.authority.generationState(generationB)).toBeNull();
+  });
+
+  test('cancelling repeatedly while in flight is harmless', async () => {
+    const h = requestHarness({gate: true});
+    const a = await withActiveRequest(h);
+    const withActiveOnly = h.authority.trackedGenerations;
+
+    const pending = h.owner.stage({label: 'B'});
+    expect(h.owner.cancelCandidate()).toBe(true);
+    // The record is already gone, so further calls have nothing to cancel.
+    expect(h.owner.cancelCandidate()).toBe(false);
+    expect(h.owner.cancelCandidate()).toBe(false);
+
+    expect(h.authority.trackedGenerations).toBe(withActiveOnly);
+    expect(h.aborted).toEqual(['B']);
+
+    h.release('B');
+    expect(refusedStaging(await pending).reason).toBe('cancelled');
+    // Disposed exactly once despite three cancellations and a late return.
+    expect(h.built[h.built.length - 1].disposed).toBe(1);
+    expect(h.owner.current).toBe(a);
+  });
+
+  test('candidate cancellation never releases a visible generation', async () => {
+    const h = requestHarness({gate: true});
+    // A active, then B activated so A is outgoing and both are visible.
+    const a = await withActiveRequest(h);
+    const pendingB = h.owner.stage({label: 'B'});
+    h.release('B');
+    staged(await pendingB);
+    transitioned(h.owner.activate());
+    const b = h.owner.current!;
+    const bothVisible = h.authority.trackedGenerations;
+    expect(bothVisible).toBe(2);
+
+    // A third candidate is staged and cancelled while preparing.
+    const pendingC = h.owner.stage({label: 'C'});
+    expect(h.authority.trackedGenerations).toBe(bothVisible + 1);
+    h.owner.cancelCandidate();
+
+    // Only the candidate's generation went.
+    expect(h.authority.trackedGenerations).toBe(bothVisible);
+    expect(h.authority.generationState(a.generation)).not.toBeNull();
+    expect(h.authority.generationState(b.generation)).not.toBeNull();
+    expect(h.owner.outgoing).toBe(a);
+    expect(h.owner.current).toBe(b);
+    expect(a.disposed).toBe(0);
+    expect(b.disposed).toBe(0);
+
+    h.release('C');
+    expect(refusedStaging(await pendingC).reason).toBe('cancelled');
+    expect(h.authority.trackedGenerations).toBe(bothVisible);
+  });
+});
