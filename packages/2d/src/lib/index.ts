@@ -2,6 +2,7 @@ export * from './code';
 export * from './components';
 export * from './curves';
 export * from './decorators';
+export * from './geography';
 export * from './geometry';
 export * from './interaction';
 export * from './jsx-runtime';
