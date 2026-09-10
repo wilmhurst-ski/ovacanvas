@@ -132,6 +132,7 @@ export abstract class GeneratorScene<T>
    * @remarks
    * Protected so that subclasses can fail closed on their own operations.
    */
+  public readonly sharedWebGLContext: SharedWebGLContext;
   protected disposed = false;
 
   public constructor(
@@ -150,6 +151,7 @@ export abstract class GeneratorScene<T>
     decorate(this.runnerFactory, threadable(this.name));
     this.timeEvents = new description.timeEventsClass(this);
     this.variables = new Variables(this);
+    this.sharedWebGLContext = description.sharedWebGLContext;
     this.shaders = new Shaders(this, description.sharedWebGLContext);
     this.slides = new Slides(this);
     this.sounds = new Sounds(this);

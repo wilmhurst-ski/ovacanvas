@@ -85,6 +85,19 @@ export class Shaders implements WebGLContextOwner {
 
   public setup(gl: WebGL2RenderingContext): void {
     this.gl = gl;
+
+    // Explicitly establish all state Shaders relies upon
+    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(false);
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.colorMask(true, true, true, true);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+    gl.disable(gl.BLEND);
+    gl.bindVertexArray(null);
+
     this.updateViewport();
     this.positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
@@ -110,6 +123,12 @@ export class Shaders implements WebGLContextOwner {
     gl.disableVertexAttribArray(this.positionLocation);
     gl.deleteTexture(this.sourceTexture);
     gl.deleteTexture(this.destinationTexture);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.useProgram(null);
     this.positionBuffer = null;
     this.sourceTexture = null;
     this.destinationTexture = null;

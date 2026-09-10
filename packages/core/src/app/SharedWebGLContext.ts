@@ -119,7 +119,7 @@ export class SharedWebGLContext {
     }
 
     this.gl = document.createElement('canvas').getContext('webgl2', {
-      depth: false,
+      depth: true,
       premultipliedAlpha: false,
       stencil: false,
       powerPreference: 'high-performance',

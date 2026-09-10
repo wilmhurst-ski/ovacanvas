@@ -155,6 +155,7 @@ export interface Scene<T = unknown> {
   readonly variables: Variables;
   readonly random: Random;
   readonly meta: SceneMetadata;
+  readonly sharedWebGLContext: SharedWebGLContext;
   creationStack?: string;
 
   /**

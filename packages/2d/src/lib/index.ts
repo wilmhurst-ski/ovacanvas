@@ -9,5 +9,7 @@ export * from './jsx-runtime';
 export * from './layout';
 export * from './partials';
 export * from './projection';
+export * from './scene3d';
+export {Matrix4} from './scene3d';
 export * from './scenes';
 export * from './utils';
