@@ -38,12 +38,14 @@ export class Line3D extends Object3D {
   ) {
     super(id, options.transform);
     this.geometry = canonicalizeLines(geometry);
-    if (options.lineWidth !== undefined)
-      {this.lineWidth = Math.max(0.1, options.lineWidth);}
+    if (options.lineWidth !== undefined) {
+      this.lineWidth = Math.max(0.1, options.lineWidth);
+    }
     if (options.depthTest !== undefined) this.depthTest = options.depthTest;
     if (options.color !== undefined) this.color = options.color;
-    if (options.opacity !== undefined)
-      {this.opacity = Math.max(0, Math.min(1, options.opacity));}
+    if (options.opacity !== undefined) {
+      this.opacity = Math.max(0, Math.min(1, options.opacity));
+    }
     this.fingerprint = fingerprintLineGeometry(geometry);
     this.cachedLocalBounds = computeGeometryBounds(this.geometry);
   }

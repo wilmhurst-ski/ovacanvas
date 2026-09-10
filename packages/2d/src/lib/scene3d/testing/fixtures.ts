@@ -300,8 +300,9 @@ export class MockWebGL2RenderingContext {
   }
   public bindBuffer(target: number, buffer: any) {
     if (target === this.ARRAY_BUFFER) this.currentArrayBuffer = buffer;
-    if (target === this.ELEMENT_ARRAY_BUFFER)
-      {this.currentElementArrayBuffer = buffer;}
+    if (target === this.ELEMENT_ARRAY_BUFFER) {
+      this.currentElementArrayBuffer = buffer;
+    }
   }
   public bufferData(target: number, data: any, _usage: number) {
     if (target === this.ARRAY_BUFFER && this.currentArrayBuffer) {

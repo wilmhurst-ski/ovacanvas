@@ -2,7 +2,6 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-10
-- **Authors:** OvaCanvas Core Team & Director of Architecture
 - **Applies to:** `@ovacanvas/2d`
 - **Consumer:** Ovareel compiler and realization host
 - **Supersedes:** Commit `b9d4182` no-dependency geographic constraint; amends

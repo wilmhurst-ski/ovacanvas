@@ -49,12 +49,15 @@ export abstract class Object3D {
     this.id = id;
 
     if (transform) {
-      if (transform.translation)
-        {this.localTranslation = Vector3.from(transform.translation);}
-      if (transform.rotation)
-        {this.localRotation = Quaternion.from(transform.rotation);}
-      if (transform.scale)
-        {this.localScale = Vector3.from(transform.scale, Vector3.one);}
+      if (transform.translation) {
+        this.localTranslation = Vector3.from(transform.translation);
+      }
+      if (transform.rotation) {
+        this.localRotation = Quaternion.from(transform.rotation);
+      }
+      if (transform.scale) {
+        this.localScale = Vector3.from(transform.scale, Vector3.one);
+      }
     }
   }
 

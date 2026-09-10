@@ -38,12 +38,14 @@ export class PointCloud3D extends Object3D {
   ) {
     super(id, options.transform);
     this.geometry = canonicalizePoints(geometry);
-    if (options.pointSize !== undefined)
-      {this.pointSize = Math.max(1, Math.min(64, options.pointSize));}
+    if (options.pointSize !== undefined) {
+      this.pointSize = Math.max(1, Math.min(64, options.pointSize));
+    }
     if (options.depthTest !== undefined) this.depthTest = options.depthTest;
     if (options.color !== undefined) this.color = options.color;
-    if (options.opacity !== undefined)
-      {this.opacity = Math.max(0, Math.min(1, options.opacity));}
+    if (options.opacity !== undefined) {
+      this.opacity = Math.max(0, Math.min(1, options.opacity));
+    }
     this.fingerprint = fingerprintPointGeometry(geometry);
     this.cachedLocalBounds = computeGeometryBounds(this.geometry);
   }

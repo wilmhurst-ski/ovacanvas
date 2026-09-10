@@ -2,7 +2,6 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-10
-- **Authors:** OvaCanvas Core Team & Director of Architecture
 - **Applies to:** `@ovacanvas/2d`, `@ovacanvas/core`
 - **Consumer:** Ovareel compiler and realization host
 - **Supersedes:** Pure 2D lowering for projected 3D geometry; amends Ovareel
