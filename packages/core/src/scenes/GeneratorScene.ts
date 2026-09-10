@@ -1,4 +1,4 @@
-import {Logger, PlaybackStatus} from '../app';
+import {Logger, PlaybackStatus, SharedWebGLContext} from '../app';
 import {decorate, threadable} from '../decorators';
 import {EventDispatcher, ValueDispatcher} from '../events';
 import {DependencyContext, SignalValue} from '../signals';
@@ -127,12 +127,21 @@ export abstract class GeneratorScene<T>
   private counters: Record<string, number> = {};
   private size: Vector2;
   /**
+   * The WebGL context shared across this runtime's scenes.
+   *
+   * @remarks
+   * Exposed so that a scene needing GPU resources can borrow the one context
+   * the host owns, rather than creating a second one. Borrowing and teardown
+   * remain the context's own business.
+   */
+  public readonly sharedWebGLContext: SharedWebGLContext;
+
+  /**
    * Whether this scene has been terminally disposed.
    *
    * @remarks
    * Protected so that subclasses can fail closed on their own operations.
    */
-  public readonly sharedWebGLContext: SharedWebGLContext;
   protected disposed = false;
 
   public constructor(
