@@ -7,6 +7,12 @@ unclear or wrong, an issue pointing that out is a welcome contribution.
 
 Before contributing, please read our [Code of Conduct](./CODE_OF_CONDUCT.md).
 
+## Automated contributors
+
+If you are an AI agent working in this repository, [AGENTS.md](./AGENTS.md) is
+mandatory reading. It states what may and may not be committed, and it is not a
+style guide.
+
 ## Reporting a bug
 
 Search [the issue tracker][issues] first — the problem may already be known and
