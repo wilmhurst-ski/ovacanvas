@@ -427,23 +427,41 @@ export class SVG extends Shape {
       svgRoot.hasAttribute('width') || svgRoot.hasAttribute('height');
 
     if (hasViewBox) {
-      const {x, y, width, height} = svgRoot.viewBox.baseVal;
-      viewBox = new BBox(x, y, width, height);
+      if (svgRoot.viewBox && svgRoot.viewBox.baseVal) {
+        const {x, y, width, height} = svgRoot.viewBox.baseVal;
+        viewBox = new BBox(x, y, width, height);
+      } else {
+        const raw = svgRoot.getAttribute('viewBox');
+        if (raw) {
+          const parts = raw
+            .trim()
+            .split(/[\s,]+/)
+            .map(Number);
+          if (parts.length === 4 && parts.every(n => !Number.isNaN(n))) {
+            viewBox = new BBox(parts[0], parts[1], parts[2], parts[3]);
+          }
+        }
+      }
 
       if (!hasSize) size = viewBox.size;
     }
 
     if (hasSize) {
-      size = new Vector2(
-        svgRoot.width.baseVal.value,
-        svgRoot.height.baseVal.value,
-      );
+      const widthVal =
+        svgRoot.width?.baseVal?.value ??
+        parseFloat(svgRoot.getAttribute('width') ?? '0');
+      const heightVal =
+        svgRoot.height?.baseVal?.value ??
+        parseFloat(svgRoot.getAttribute('height') ?? '0');
+      size = new Vector2(widthVal, heightVal);
 
       if (!hasViewBox) viewBox = new BBox(0, 0, size.width, size.height);
     }
 
     if (!hasViewBox && !hasSize) {
-      viewBox = new BBox(svgRoot.getBBox());
+      if (typeof svgRoot.getBBox === 'function') {
+        viewBox = new BBox(svgRoot.getBBox());
+      }
       size = viewBox.size;
     }
 
