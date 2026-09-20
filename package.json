@@ -26,6 +26,7 @@
     "vite-plugin:dev": "npm run dev -w packages/vite-plugin",
     "vite-plugin:build": "npm run build -w packages/vite-plugin",
     "sync": "node tools/sync-workspace-packages.mjs",
+    "postinstall": "node tools/sync-workspace-packages.mjs",
     "studio:dev": "npm run dev -w packages/studio",
     "studio:test": "npm run test -w packages/studio",
     "studio:typecheck": "npm run typecheck -w packages/studio",

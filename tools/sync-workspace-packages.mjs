@@ -1,30 +1,10 @@
 /**
- * Mirror each `packages/*` directory into `node_modules/@ovacanvas/*`.
+ * Ensure each `packages/*` package is linked into `node_modules/@ovacanvas/*`
+ * via directory junctions (Windows) or symlinks (POSIX).
  *
  * @remarks
- * **Why this exists.** npm workspaces normally install `node_modules/@ovacanvas/*`
- * as symlinks into `packages/*`. In this checkout they are plain directory
- * copies instead, because the tree was produced by a file-level copy that
- * followed symlinks and materialised their targets. Nothing in the toolchain
- * knows that, so the moment a package is rebuilt every consumer keeps reading
- * the stale copy - with no error, just old behaviour, which is a genuinely
- * nasty way to lose an hour.
- *
- * **Two ways to fix that, and why this one is the default.** Replacing the
- * copies with junctions is the "correct" npm shape, and it was tried here: it
- * makes TypeScript resolve `@ovacanvas/2d` through to `packages/2d`, and 2d's
- * emitted declarations contain a self-referencing
- * `import("@ovacanvas/2d/src/lib/components")`. That drags 2d's raw `.tsx`
- * sources into every consumer's compile, which then fails on `--jsx` and on
- * module declarations it never asked about. The copy layout is the one this
- * checkout builds cleanly under, so the copies are kept current instead.
- *
- * A checkout made with a normal `npm install` needs none of this - npm's
- * symlinks stay correct by themselves.
- *
- * Nested `node_modules` travel with each copy: npm does not hoist everything
- * (2d's `gl-matrix` is a real example), and a copy that drops them breaks
- * module resolution at runtime.
+ * Eliminates physical copies so rebuilt packages are immediately visible
+ * across the workspace without stale-read bugs.
  *
  * Usage: `node tools/sync-workspace-packages.mjs`
  */
@@ -35,6 +15,10 @@ import {fileURLToPath} from 'url';
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const packagesDir = path.join(repoRoot, 'packages');
 const linkRoot = path.join(repoRoot, 'node_modules', '@ovacanvas');
+
+if (!fs.existsSync(linkRoot)) {
+  fs.mkdirSync(linkRoot, {recursive: true});
+}
 
 const names = fs
   .readdirSync(packagesDir, {withFileTypes: true})
@@ -48,9 +32,23 @@ for (const name of names) {
   // Only real workspace packages - skip scratch directories.
   if (!fs.existsSync(path.join(source, 'package.json'))) continue;
 
-  if (fs.existsSync(destination)) {
+  const stat = fs.lstatSync(destination, {throwIfNoEntry: false});
+  if (stat) {
+    if (stat.isSymbolicLink()) {
+      try {
+        const target = fs.readlinkSync(destination);
+        if (path.resolve(linkRoot, target) === path.resolve(source)) {
+          console.log(`${name}: already linked`);
+          continue;
+        }
+      } catch {
+        // Fall through to recreate link
+      }
+    }
     fs.rmSync(destination, {recursive: true, force: true});
   }
-  fs.cpSync(source, destination, {recursive: true, dereference: true});
-  console.log(`${name}: synced`);
+
+  const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+  fs.symlinkSync(source, destination, linkType);
+  console.log(`${name}: linked (${linkType})`);
 }
