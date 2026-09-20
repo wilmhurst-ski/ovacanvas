@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {RunTelemetry, STAGE} from './telemetry';
+import {RunTelemetry, STAGE, evaluateTimeToFirstVisual} from './telemetry';
 
 describe('RunTelemetry', () => {
   it('records how long a started stage took', () => {
@@ -80,5 +80,29 @@ describe('RunTelemetry', () => {
 
   it('summarises an empty run without inventing numbers', () => {
     expect(new RunTelemetry().summary()).toEqual({latest: [], percentiles: {}});
+  });
+});
+
+describe('evaluateTimeToFirstVisual', () => {
+  it('classifies timing within soft budget (<= 4000ms) as optimal', () => {
+    const result = evaluateTimeToFirstVisual(1200);
+    expect(result.passedSoftBudget).toBe(true);
+    expect(result.passedHardBudget).toBe(true);
+    expect(result.rating).toBe('optimal');
+    expect(result.elapsedMs).toBe(1200);
+  });
+
+  it('classifies timing between soft and hard budget (4000ms-8000ms) as acceptable', () => {
+    const result = evaluateTimeToFirstVisual(6200);
+    expect(result.passedSoftBudget).toBe(false);
+    expect(result.passedHardBudget).toBe(true);
+    expect(result.rating).toBe('acceptable');
+  });
+
+  it('classifies timing exceeding hard budget (> 8000ms) as breached', () => {
+    const result = evaluateTimeToFirstVisual(9500);
+    expect(result.passedSoftBudget).toBe(false);
+    expect(result.passedHardBudget).toBe(false);
+    expect(result.rating).toBe('breached');
   });
 });

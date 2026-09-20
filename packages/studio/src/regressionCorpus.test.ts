@@ -132,6 +132,65 @@ describe('summariseCorpus', () => {
     });
   });
 
+  it('breaks the result down by genre and records attempt distribution', () => {
+    const summary = summariseCorpus([
+      result({
+        id: 'det1',
+        domain: 'math',
+        genre: 'step-by-step',
+        deterministic: true,
+        attempts: 0,
+        firstAttempt: false,
+      }),
+      result({
+        id: 'step1',
+        domain: 'cs',
+        genre: 'step-by-step',
+        attempts: 1,
+        firstAttempt: true,
+      }),
+      result({
+        id: 'time1',
+        domain: 'history',
+        genre: 'timeline',
+        attempts: 2,
+        firstAttempt: false,
+      }),
+      result({
+        id: 'fail1',
+        domain: 'physics',
+        genre: 'diagram',
+        ok: false,
+        attempts: 3,
+        firstAttempt: false,
+      }),
+    ]);
+
+    expect(summary.byGenre['step-by-step']).toEqual({
+      measured: 2,
+      succeeded: 2,
+      firstAttempt: 1,
+    });
+    expect(summary.byGenre.timeline).toEqual({
+      measured: 1,
+      succeeded: 1,
+      firstAttempt: 0,
+    });
+    expect(summary.byGenre.diagram).toEqual({
+      measured: 1,
+      succeeded: 0,
+      firstAttempt: 0,
+    });
+
+    expect(summary.attemptDistribution).toEqual({
+      deterministic: 1,
+      attempt1: 1,
+      attempt2: 1,
+      attempt3: 0,
+      failed: 1,
+    });
+  });
+
   it('totals tokens across every attempt, including the ones that failed', () => {
     // A topic that fails after three attempts is the most expensive kind, and
     // a cost figure that only counted successes would describe the most
@@ -470,5 +529,35 @@ describe('formatCorpusReport', () => {
     const report = formatCorpusReport(current);
     expect(report).toContain('1 of 2 got no provider answer and are excluded');
     expect(report).toContain('no provider answer');
+  });
+
+  it('formats attempt distribution, domain, and genre breakdowns', () => {
+    const current = run([
+      result({
+        id: 'm1',
+        domain: 'math',
+        genre: 'step-by-step',
+        deterministic: true,
+        attempts: 0,
+        firstAttempt: false,
+      }),
+      result({
+        id: 'g1',
+        domain: 'geography',
+        genre: 'overview',
+        attempts: 1,
+        firstAttempt: true,
+      }),
+    ]);
+    const report = formatCorpusReport(current);
+    expect(report).toContain(
+      'attempt distribution: 1 deterministic · 1 1st attempt · 0 2nd attempt · 0 3rd attempt · 0 failed',
+    );
+    expect(report).toContain(
+      'by domain: geography: 1/1 (100%) · math: 1/1 (100%)',
+    );
+    expect(report).toContain(
+      'by genre: overview: 1/1 (100%) · step-by-step: 1/1 (100%)',
+    );
   });
 });

@@ -32,6 +32,7 @@ import {sumUsage, type TokenUsage} from './providers';
 export interface CorpusTopic {
   readonly id: string;
   readonly domain: string;
+  readonly genre?: string;
   readonly topic: string;
   /** What a good result looks like, for whoever reads the report. */
   readonly expects?: string;
@@ -46,6 +47,7 @@ export interface CorpusFile {
 export interface CorpusTopicResult {
   readonly id: string;
   readonly domain: string;
+  readonly genre?: string;
   readonly topic: string;
   readonly ok: boolean;
   readonly attempts: number;
@@ -106,6 +108,14 @@ export interface DomainSummary {
   readonly firstAttempt: number;
 }
 
+export interface AttemptDistribution {
+  readonly deterministic: number;
+  readonly attempt1: number;
+  readonly attempt2: number;
+  readonly attempt3: number;
+  readonly failed: number;
+}
+
 export interface CorpusSummary {
   readonly total: number;
   /**
@@ -127,6 +137,8 @@ export interface CorpusSummary {
   /** Tokens billed across the whole run, or `null` if none were reported. */
   readonly usage: TokenUsage | null;
   readonly byDomain: Readonly<Record<string, DomainSummary>>;
+  readonly byGenre: Readonly<Record<string, DomainSummary>>;
+  readonly attemptDistribution: AttemptDistribution;
 }
 
 export interface CorpusRun {
@@ -183,6 +195,29 @@ function percentile(sorted: readonly number[], fraction: number): number {
   return sorted[index];
 }
 
+function inferGenre(result: CorpusTopicResult): string {
+  if (result.genre) {
+    return result.genre;
+  }
+  if (result.id.includes('timeline')) {
+    return 'timeline';
+  }
+  if (result.id.includes('cell') || result.id.includes('anatomy')) {
+    return 'anatomy';
+  }
+  if (result.id.includes('forces') || result.id.includes('map')) {
+    return 'diagram';
+  }
+  if (
+    result.id.includes('math') ||
+    result.id.includes('algorithm') ||
+    result.id.includes('route')
+  ) {
+    return 'step-by-step';
+  }
+  return 'general';
+}
+
 export function summariseCorpus(
   results: readonly CorpusTopicResult[],
 ): CorpusSummary {
@@ -194,29 +229,60 @@ export function summariseCorpus(
     .sort((a, b) => a - b);
 
   const byDomain: Record<string, DomainSummary> = {};
-  for (const result of measured) {
-    const current = byDomain[result.domain] ?? {
+  const byGenre: Record<string, DomainSummary> = {};
+
+  for (const item of measured) {
+    const currentDomain = byDomain[item.domain] ?? {
       measured: 0,
       succeeded: 0,
       firstAttempt: 0,
     };
-    byDomain[result.domain] = {
-      measured: current.measured + 1,
-      succeeded: current.succeeded + (result.ok ? 1 : 0),
-      firstAttempt: current.firstAttempt + (result.firstAttempt ? 1 : 0),
+    byDomain[item.domain] = {
+      measured: currentDomain.measured + 1,
+      succeeded: currentDomain.succeeded + (item.ok ? 1 : 0),
+      firstAttempt: currentDomain.firstAttempt + (item.firstAttempt ? 1 : 0),
+    };
+
+    const genre = inferGenre(item);
+    const currentGenre = byGenre[genre] ?? {
+      measured: 0,
+      succeeded: 0,
+      firstAttempt: 0,
+    };
+    byGenre[genre] = {
+      measured: currentGenre.measured + 1,
+      succeeded: currentGenre.succeeded + (item.ok ? 1 : 0),
+      firstAttempt: currentGenre.firstAttempt + (item.firstAttempt ? 1 : 0),
     };
   }
 
-  const attemptsTotal = measured.reduce(
-    (sum, result) => sum + result.attempts,
-    0,
-  );
+  let deterministicCount = 0;
+  let attempt1Count = 0;
+  let attempt2Count = 0;
+  let attempt3Count = 0;
+  let failedCount = 0;
+
+  for (const item of measured) {
+    if (!item.ok) {
+      failedCount++;
+    } else if (item.deterministic) {
+      deterministicCount++;
+    } else if (item.attempts === 1) {
+      attempt1Count++;
+    } else if (item.attempts === 2) {
+      attempt2Count++;
+    } else {
+      attempt3Count++;
+    }
+  }
+
+  const attemptsTotal = measured.reduce((sum, item) => sum + item.attempts, 0);
 
   // Summed over EVERY result, not just the measured ones: a topic that failed
   // after three attempts still billed for three attempts, and excluding it
   // would understate exactly the case that costs most.
   const usage = results.reduce<TokenUsage | null>(
-    (total, result) => sumUsage(total, result.usage),
+    (total, item) => sumUsage(total, item.usage),
     null,
   );
 
@@ -237,6 +303,14 @@ export function summariseCorpus(
     },
     usage,
     byDomain,
+    byGenre,
+    attemptDistribution: {
+      deterministic: deterministicCount,
+      attempt1: attempt1Count,
+      attempt2: attempt2Count,
+      attempt3: attempt3Count,
+      failed: failedCount,
+    },
   };
 }
 
@@ -518,6 +592,7 @@ export async function runCorpus(options: RunCorpusOptions): Promise<CorpusRun> {
     results.push({
       id: entry.id,
       domain: entry.domain,
+      ...(entry.genre ? {genre: entry.genre} : {}),
       topic: entry.topic,
       ok: outcome.ok,
       attempts: outcome.ok ? outcome.attempts : 0,
@@ -565,6 +640,28 @@ export function formatCorpusReport(
   lines.push(
     `  latency p50 ${summary.latencyMs.p50}ms · p90 ${summary.latencyMs.p90}ms · max ${summary.latencyMs.max}ms`,
   );
+  if (summary.attemptDistribution) {
+    const dist = summary.attemptDistribution;
+    lines.push(
+      `  attempt distribution: ${dist.deterministic} deterministic · ${dist.attempt1} 1st attempt · ${dist.attempt2} 2nd attempt · ${dist.attempt3} 3rd attempt · ${dist.failed} failed`,
+    );
+  }
+  const domainKeys = Object.keys(summary.byDomain).sort();
+  if (domainKeys.length > 0) {
+    const domainParts = domainKeys.map(d => {
+      const s = summary.byDomain[d];
+      return `${d}: ${s.succeeded}/${s.measured} (${Math.round((s.measured ? s.succeeded / s.measured : 0) * 100)}%)`;
+    });
+    lines.push(`  by domain: ${domainParts.join(' · ')}`);
+  }
+  const genreKeys = Object.keys(summary.byGenre ?? {}).sort();
+  if (genreKeys.length > 0) {
+    const genreParts = genreKeys.map(g => {
+      const s = summary.byGenre[g];
+      return `${g}: ${s.succeeded}/${s.measured} (${Math.round((s.measured ? s.succeeded / s.measured : 0) * 100)}%)`;
+    });
+    lines.push(`  by genre: ${genreParts.join(' · ')}`);
+  }
   if (summary.usage) {
     lines.push(
       `  tokens: ${summary.usage.promptTokens} in + ${summary.usage.completionTokens} out ` +

@@ -300,8 +300,99 @@ export function selectProvider(
   }
   // Prefer whichever provider actually has a key, in a fixed order, so a
   // missing key never turns into a confusing auth failure later.
-  const withKey = Object.values(PROVIDERS).find(spec => env[spec.envKey]);
+  const withKey = Object.values(PROVIDERS).find(
+    spec => resolveProviderKeys(spec, env).length > 0,
+  );
   return withKey ?? PROVIDERS.gemini;
+}
+
+/**
+ * Extract all configured API keys for a provider spec from the environment.
+ *
+ * @remarks
+ * Supports:
+ * 1. Single key in `spec.envKey` (e.g. `GOOGLE_API_KEY="key1"`)
+ * 2. Comma-separated keys in `spec.envKey` (e.g. `GOOGLE_API_KEY="key1,key2,key3"`)
+ * 3. Plural environment variable (e.g. `GOOGLE_API_KEYS="key1,key2"`)
+ * 4. Numbered keys (e.g. `GOOGLE_API_KEY_1="key1"`, `GOOGLE_API_KEY_2="key2"`)
+ */
+export function resolveProviderKeys(
+  spec: ProviderSpec,
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const keys: string[] = [];
+
+  // Check plural env var e.g. GOOGLE_API_KEYS
+  const pluralKey = `${spec.envKey}S`;
+  const pluralVal = env[pluralKey];
+  if (pluralVal) {
+    const split = pluralVal
+      .split(',')
+      .map(k => k.trim())
+      .filter(Boolean);
+    for (const k of split) {
+      if (!keys.includes(k)) keys.push(k);
+    }
+  }
+
+  // Check main env var e.g. GOOGLE_API_KEY (can be comma-separated or single)
+  const mainVal = env[spec.envKey];
+  if (mainVal) {
+    const split = mainVal
+      .split(',')
+      .map(k => k.trim())
+      .filter(Boolean);
+    for (const k of split) {
+      if (!keys.includes(k)) keys.push(k);
+    }
+  }
+
+  // Check numbered env vars e.g. GOOGLE_API_KEY_1, GOOGLE_API_KEY_2...
+  for (let i = 1; i <= 10; i++) {
+    const numKey = `${spec.envKey}_${i}`;
+    const val = env[numKey]?.trim();
+    if (val && !keys.includes(val)) {
+      keys.push(val);
+    }
+  }
+
+  return keys;
+}
+
+/**
+ * Stateful key rotator for a provider.
+ *
+ * @remarks
+ * Cycles through available API keys on rate-limit responses (HTTP 429).
+ * Preserves rotation state across attempts so healthy keys are used next.
+ */
+export class KeyRotator {
+  private activeIndex = 0;
+
+  public constructor(public readonly keys: readonly string[]) {}
+
+  public get currentKey(): string | null {
+    if (this.keys.length === 0) return null;
+    return this.keys[this.activeIndex % this.keys.length];
+  }
+
+  public get currentIndex(): number {
+    return this.activeIndex;
+  }
+
+  public get keyCount(): number {
+    return this.keys.length;
+  }
+
+  /**
+   * Rotate to the next available key.
+   * @returns Whether a distinct key was rotated to (true if keyCount \> 1).
+   */
+  public rotate(): boolean {
+    if (this.keys.length <= 1) return false;
+    this.activeIndex = (this.activeIndex + 1) % this.keys.length;
+    return true;
+  }
 }
 
 /**

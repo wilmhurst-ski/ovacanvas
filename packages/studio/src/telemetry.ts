@@ -141,16 +141,55 @@ export class RunTelemetry {
  * stage is worse than no report.
  */
 export const STAGE = {
-  /** Question submitted -\> the host-authored opener beat is on screen. */
+  /** Question submitted to the host-authored opener beat is on screen. */
   openerVisible: 'opener-visible',
-  /** Question submitted -\> the authored beat has been asked for. */
+  /** Question submitted to the authored beat has been asked for. */
   authoring: 'authoring',
-  /** Authoring reply -\> the compiled module has resolved into a beat. */
+  /** Authoring reply to the compiled module has resolved into a beat. */
   resolve: 'resolve',
-  /** Resolve -\> the beat passed its audit and was activated. */
+  /** Resolve to the beat passed its audit and was activated. */
   stageAndAudit: 'stage-and-audit',
-  /** Question submitted -\> the authored beat is on screen. */
+  /** Question submitted to the authored beat is on screen. */
   beatVisible: 'beat-visible',
 } as const;
 
 export type StageName = (typeof STAGE)[keyof typeof STAGE];
+
+export const SOFT_TIME_TO_FIRST_VISUAL_MS = 4000;
+export const HARD_TIME_TO_FIRST_VISUAL_MS = 8000;
+
+export interface FirstVisualBudgetResult {
+  readonly elapsedMs: number;
+  readonly softBudgetMs: number;
+  readonly hardBudgetMs: number;
+  readonly passedSoftBudget: boolean;
+  readonly passedHardBudget: boolean;
+  readonly rating: 'optimal' | 'acceptable' | 'breached';
+}
+
+/**
+ * Compare an observed time-to-first-visual measurement against the product's
+ * 4s soft / 8s hard latency targets.
+ */
+export function evaluateTimeToFirstVisual(
+  elapsedMs: number,
+  softBudgetMs = SOFT_TIME_TO_FIRST_VISUAL_MS,
+  hardBudgetMs = HARD_TIME_TO_FIRST_VISUAL_MS,
+): FirstVisualBudgetResult {
+  const passedSoftBudget = elapsedMs <= softBudgetMs;
+  const passedHardBudget = elapsedMs <= hardBudgetMs;
+  let rating: 'optimal' | 'acceptable' | 'breached' = 'optimal';
+  if (!passedHardBudget) {
+    rating = 'breached';
+  } else if (!passedSoftBudget) {
+    rating = 'acceptable';
+  }
+  return {
+    elapsedMs,
+    softBudgetMs,
+    hardBudgetMs,
+    passedSoftBudget,
+    passedHardBudget,
+    rating,
+  };
+}

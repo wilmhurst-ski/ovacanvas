@@ -10,7 +10,9 @@ import {solveQuadraticEquation} from './authoring/strategies/equationIntent/solv
 import {solveRationalEquation} from './authoring/strategies/equationIntent/solveRational';
 import type {AuthoringStrategy} from './authoring/strategies/types';
 import {
+  KeyRotator,
   complete,
+  resolveProviderKeys,
   selectProvider,
   sumUsage,
   type ProviderSpec,
@@ -355,7 +357,9 @@ export async function authorWithRetry(
   const solved = await solveWithoutModel(options.topic, options.projectRoot);
   if (solved) return solved;
   const spec: ProviderSpec = selectProvider(options.provider, env);
-  const apiKey = env[spec.envKey];
+  const keys = resolveProviderKeys(spec, env);
+  const rotator = new KeyRotator(keys);
+  let apiKey = rotator.currentKey;
   // `OVACANVAS_MODEL` is honoured because model ids retire, and a retired id
   // should be fixable by an operator changing an environment variable rather
   // than by editing code. Two comments in `providers.ts` already told readers
@@ -413,6 +417,7 @@ export async function authorWithRetry(
     }
     contentAttempts++;
 
+    apiKey = rotator.currentKey ?? apiKey;
     const result = await complete(spec, apiKey, {
       model,
       system: systemPrompt,
@@ -427,6 +432,20 @@ export async function authorWithRetry(
         outcome: 'provider-failed',
         detail: result.detail,
       });
+
+      // Multi-key rotation per provider on rate-limit response (HTTP 429)
+      const isRateLimit =
+        result.detail.includes('429') || /rate limited/i.test(result.detail);
+      if (isRateLimit && rotator.rotate()) {
+        log.push({
+          attempt: contentAttempts,
+          outcome: 'provider-failed',
+          detail: `rate limit (HTTP 429) encountered; rotated to key ${rotator.currentIndex + 1}/${rotator.keyCount} for provider "${spec.id}"`,
+        });
+        contentAttempts--; // refund attempt to retry immediately with rotated key
+        continue;
+      }
+
       if (result.kind === 'unrecoverable') {
         return {
           ok: false,

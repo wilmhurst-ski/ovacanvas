@@ -1,8 +1,10 @@
 import {describe, expect, it} from 'vitest';
 import {
+  KeyRotator,
   PROVIDERS,
   classifyHttpFailure,
   complete,
+  resolveProviderKeys,
   selectProvider,
   stripCodeFence,
 } from './providers';
@@ -315,5 +317,117 @@ describe('complete', () => {
       }) as unknown as typeof fetch,
     });
     expect(seenUrl).toContain('key=secret-key');
+  });
+});
+
+describe('resolveProviderKeys and KeyRotator', () => {
+  it('resolves single, comma-separated, plural, and numbered keys without duplicates', () => {
+    const spec = PROVIDERS.gemini;
+
+    // Single key
+    expect(resolveProviderKeys(spec, {GOOGLE_API_KEY: 'k1'})).toEqual(['k1']);
+
+    // Comma-separated
+    expect(resolveProviderKeys(spec, {GOOGLE_API_KEY: 'k1, k2, k3'})).toEqual([
+      'k1',
+      'k2',
+      'k3',
+    ]);
+
+    // Plural env var and numbered env vars combined
+    const env = {
+      GOOGLE_API_KEYS: 'k1, k2',
+      GOOGLE_API_KEY: 'k2, k3',
+      GOOGLE_API_KEY_1: 'k3',
+      GOOGLE_API_KEY_2: 'k4',
+    };
+    expect(resolveProviderKeys(spec, env)).toEqual(['k1', 'k2', 'k3', 'k4']);
+  });
+
+  it('rotates across multiple keys in round-robin and returns false for single key', () => {
+    const single = new KeyRotator(['only-one']);
+    expect(single.currentKey).toBe('only-one');
+    expect(single.rotate()).toBe(false);
+    expect(single.currentKey).toBe('only-one');
+
+    const multi = new KeyRotator(['key-a', 'key-b', 'key-c']);
+    expect(multi.currentKey).toBe('key-a');
+    expect(multi.currentIndex).toBe(0);
+
+    expect(multi.rotate()).toBe(true);
+    expect(multi.currentKey).toBe('key-b');
+    expect(multi.currentIndex).toBe(1);
+
+    expect(multi.rotate()).toBe(true);
+    expect(multi.currentKey).toBe('key-c');
+    expect(multi.currentIndex).toBe(2);
+
+    expect(multi.rotate()).toBe(true);
+    expect(multi.currentKey).toBe('key-a');
+    expect(multi.currentIndex).toBe(0);
+  });
+
+  it('rotates API key when encountering HTTP 429 and succeeds on next key', async () => {
+    const spec = PROVIDERS.gemini;
+    const keys = ['rate-limited-key', 'healthy-key'];
+    const rotator = new KeyRotator(keys);
+
+    const attemptedKeys: string[] = [];
+    const mockFetch = (async (url: string) => {
+      const urlStr = String(url);
+      if (urlStr.includes('rate-limited-key')) {
+        attemptedKeys.push('rate-limited-key');
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: 429,
+              message: 'Rate limit exceeded: Please retry in 5s',
+            },
+          }),
+          {status: 429},
+        );
+      }
+      attemptedKeys.push('healthy-key');
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [{text: 'success after rotation'}],
+              },
+            },
+          ],
+        }),
+        {status: 200},
+      );
+    }) as unknown as typeof fetch;
+
+    // First attempt with key 0 hits 429
+    let res = await complete(spec, rotator.currentKey!, {
+      model: spec.defaultModel,
+      system: 's',
+      user: 'u',
+      fetchImpl: mockFetch,
+    });
+    expect(res.ok).toBe(false);
+    expect((res as any).kind).toBe('transient');
+    expect((res as any).detail).toContain('429');
+
+    // Rotate to next key
+    expect(rotator.rotate()).toBe(true);
+    expect(rotator.currentKey).toBe('healthy-key');
+
+    // Second attempt with rotated key succeeds!
+    res = await complete(spec, rotator.currentKey!, {
+      model: spec.defaultModel,
+      system: 's',
+      user: 'u',
+      fetchImpl: mockFetch,
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.text).toBe('success after rotation');
+    }
+    expect(attemptedKeys).toEqual(['rate-limited-key', 'healthy-key']);
   });
 });

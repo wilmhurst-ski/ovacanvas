@@ -5,60 +5,70 @@
     {
       "id": "math-linear",
       "domain": "math",
+      "genre": "step-by-step",
       "topic": "solve 2x + 3 = 7 step by step",
       "expects": "the equation intent compiler, first attempt"
     },
     {
       "id": "math-quadratic",
       "domain": "math",
+      "genre": "step-by-step",
       "topic": "solve the quadratic equation x^2 - 5x + 6 = 0",
       "expects": "the equation intent compiler, first attempt"
     },
     {
       "id": "math-fraction",
       "domain": "math",
+      "genre": "step-by-step",
       "topic": "solve for x: 3/(x - 1) = 2",
       "expects": "the equation intent compiler"
     },
     {
       "id": "math-two-variables",
       "domain": "math",
+      "genre": "step-by-step",
       "topic": "solve for y: 4y - 7 = 2y + 9",
       "expects": "the equation intent compiler"
     },
     {
       "id": "geography-map",
       "domain": "geography",
+      "genre": "overview",
       "topic": "show where the Sahara desert is on a world map",
       "expects": "full code generation; no intent compiler qualifies yet"
     },
     {
       "id": "geography-route",
       "domain": "geography",
+      "genre": "step-by-step",
       "topic": "the path of the Nile from source to delta",
       "expects": "full code generation"
     },
     {
       "id": "history-timeline",
       "domain": "history",
+      "genre": "timeline",
       "topic": "a timeline of the main events of the Roman Republic",
       "expects": "full code generation"
     },
     {
       "id": "physics-forces",
       "domain": "physics",
+      "genre": "step-by-step",
       "topic": "the forces acting on a block sliding down a ramp",
       "expects": "full code generation"
     },
     {
       "id": "biology-cell",
       "domain": "biology",
+      "genre": "anatomy",
       "topic": "the main parts of a plant cell and what each does",
       "expects": "full code generation"
     },
     {
       "id": "cs-algorithm",
       "domain": "computer-science",
+      "genre": "step-by-step",
       "topic": "why a binary search halves the list each time",
       "expects": "full code generation"
     }
