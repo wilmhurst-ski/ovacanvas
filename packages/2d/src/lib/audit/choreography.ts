@@ -132,8 +132,9 @@ export function validateChoreographyPlan(plan: ChoreographyPlan): void {
   const visiting = new Set<string>();
   const visited = new Set<string>();
   const visit = (id: string): void => {
-    if (visiting.has(id))
-      {throw new Error(`Entity lineage contains a cycle at ${id}`);}
+    if (visiting.has(id)) {
+      throw new Error(`Entity lineage contains a cycle at ${id}`);
+    }
     if (visited.has(id)) return;
     visiting.add(id);
     for (const parentId of entities.get(id)?.parentIds ?? []) visit(parentId);
@@ -141,6 +142,8 @@ export function validateChoreographyPlan(plan: ChoreographyPlan): void {
     visited.add(id);
   };
   for (const id of entities.keys()) visit(id);
+
+  const consumedEntities = new Set<string>();
 
   for (const transition of plan.transitions) {
     requireText(
@@ -183,6 +186,11 @@ export function validateChoreographyPlan(plan: ChoreographyPlan): void {
       if (!entities.has(id)) {
         throw new Error(
           `Transition ${transition.id} references unknown entity ${id}`,
+        );
+      }
+      if (consumedEntities.has(id)) {
+        throw new Error(
+          `Transition ${transition.id} references entity ${id} already consumed by prior transition`,
         );
       }
     }
@@ -335,6 +343,15 @@ export function validateChoreographyPlan(plan: ChoreographyPlan): void {
             `Conclusion ${targetId} must retain evidence lineage`,
           );
         }
+      }
+    }
+
+    if (
+      transition.operation === 'replace' ||
+      transition.operation === 'summarize'
+    ) {
+      for (const sourceId of transition.sourceIds) {
+        consumedEntities.add(sourceId);
       }
     }
   }

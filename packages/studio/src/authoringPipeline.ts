@@ -496,7 +496,18 @@ export async function authorWithRetry(
                 'Output the full module in the required shape.',
             );
           }
-          return {id, title} as any;
+          let choreographyPlan: any = undefined;
+          if (/exports\.choreographyPlan\s*=/.test(code)) {
+            try {
+              const mod: any = {exports: {}};
+              const fn = new Function('exports', 'require', 'module', code);
+              fn(mod.exports, () => ({}), mod);
+              choreographyPlan = mod.exports.choreographyPlan;
+            } catch {
+              // Evaluation failure will be caught or handled downstream
+            }
+          }
+          return {id, title, choreographyPlan} as any;
         }),
     });
 

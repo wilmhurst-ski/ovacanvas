@@ -43,6 +43,11 @@ export interface AuditableNode {
    */
   fill?(): unknown;
   /**
+   * Present on text/math nodes (`Txt`, `Latex`, etc.) - real `Layout.fontSize`
+   * is a signal returning the pixel font size.
+   */
+  fontSize?(): number;
+  /**
    * Present only on `Circle` - real `Circle.startAngle`/`Circle.endAngle`
    * already have exactly this shape. A full circle (the default 0-360) has
    * this at `0`; lets a check that cares whether something is a genuine

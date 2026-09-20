@@ -1,4 +1,4 @@
-import {theme} from '../theme/theme';
+import {theme, typeScale} from '../theme/theme';
 import type {AuditFinding, AuditableNode} from './types';
 import {DEFAULT_VISIBLE_OPACITY_THRESHOLD} from './types';
 
@@ -111,4 +111,98 @@ export function collectColorOveruse(
         `consistent highlight, not decoration.`,
     },
   ];
+}
+
+export interface ThemeConsistencyOptions {
+  /** Opacity threshold below which nodes are ignored. */
+  readonly opacityThreshold?: number;
+  /**
+   * Allowed font size deviation from a typeScale role in pixels.
+   * Defaults to 1px.
+   */
+  readonly fontSizeTolerance?: number;
+  /** Explicit allowed hex colors. Defaults to all active theme() token values. */
+  readonly allowedColors?: readonly string[];
+  /** Explicit allowed font sizes in pixels. Defaults to typeScale role sizes. */
+  readonly allowedFontSizes?: readonly number[];
+}
+
+/**
+ * Audit rule verifying theme token discipline:
+ * 1. Checks that node fill colors match documented `theme()` tokens rather than
+ *    arbitrary off-palette hex codes.
+ * 2. Checks that typography font sizes match documented `typeScale` roles.
+ *
+ * All findings are strictly advisory (`severity: 'advisory'`) so stylistic suggestions
+ * guide the authoring loop without blocking candidate presentation.
+ */
+export function collectThemeConsistency(
+  root: AuditableNode,
+  options: ThemeConsistencyOptions = {},
+): AuditFinding[] {
+  const opacityThreshold =
+    options.opacityThreshold ?? DEFAULT_VISIBLE_OPACITY_THRESHOLD;
+  const fontSizeTolerance = options.fontSizeTolerance ?? 1;
+
+  const currentTheme = theme();
+  const allowedColors = new Set(
+    (options.allowedColors ?? Object.values(currentTheme)).map(c =>
+      c.toLowerCase(),
+    ),
+  );
+
+  const roles = Object.entries(typeScale);
+  const allowedFontSizes =
+    options.allowedFontSizes ?? roles.map(([, role]) => role.fontSize);
+
+  const findings: AuditFinding[] = [];
+
+  const visit = (node: AuditableNode): void => {
+    if (node.absoluteOpacity() <= opacityThreshold) return;
+
+    // 1. Palette check: fill should match a theme token
+    const hex = resolvedHex(node);
+    if (hex && !allowedColors.has(hex)) {
+      findings.push({
+        ruleId: 'theme-color-consistency',
+        severity: 'advisory',
+        entities: [node.key],
+        message:
+          `Node "${node.key}" uses off-palette color "${hex}". ` +
+          `Colors should match design tokens from theme() rather than arbitrary hex values.`,
+      });
+    }
+
+    // 2. Typography check: text/math font sizes should match typeScale roles
+    const isTextOrMath =
+      typeof node.text === 'function' || typeof node.tex === 'function';
+    if (isTextOrMath && typeof node.fontSize === 'function') {
+      const size = node.fontSize();
+      if (typeof size === 'number' && Number.isFinite(size) && size > 0) {
+        const matchesRole = allowedFontSizes.some(
+          target => Math.abs(size - target) <= fontSizeTolerance,
+        );
+        if (!matchesRole) {
+          const roleSummary = roles
+            .map(([name, role]) => `${name}: ${role.fontSize}px`)
+            .join(', ');
+          findings.push({
+            ruleId: 'theme-typography-scale',
+            severity: 'advisory',
+            entities: [node.key],
+            message:
+              `Text node "${node.key}" has fontSize ${size}px, which does not match any typeScale role ` +
+              `(${roleSummary}). Use standard typeScale roles for typographic consistency.`,
+          });
+        }
+      }
+    }
+
+    for (const child of node.children()) visit(child);
+  };
+
+  const targets = root.children().length > 0 ? root.children() : [root];
+  for (const target of targets) visit(target);
+
+  return findings;
 }

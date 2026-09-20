@@ -1,6 +1,6 @@
 import {afterEach, describe, expect, it} from 'vitest';
 import {resetTheme, setTheme} from '../theme/theme';
-import {collectColorOveruse} from './colorDiscipline';
+import {collectColorOveruse, collectThemeConsistency} from './colorDiscipline';
 import {StubAuditNode} from './testing/StubAuditNode';
 
 describe('collectColorOveruse', () => {
@@ -109,5 +109,109 @@ describe('collectColorOveruse', () => {
     const findings = collectColorOveruse(root);
     expect(findings).toHaveLength(1);
     expect(findings[0].entities.sort()).toEqual(['deep', 'other', 'third']);
+  });
+});
+
+describe('collectThemeConsistency', () => {
+  afterEach(() => resetTheme());
+
+  it('passes cleanly when nodes use theme tokens and typeScale font sizes', () => {
+    const title = new StubAuditNode('title', {
+      text: 'Derivatives',
+      fill: '#151922', // theme().ink
+      fontSize: 60, // typeScale.title
+    });
+    const sub = new StubAuditNode('sub', {
+      text: 'A rate of change',
+      fill: '#59616D', // theme().secondaryInk
+      fontSize: 32, // typeScale.subtitle
+    });
+    const formula = new StubAuditNode('formula', {
+      tex: "f'(x) = 2x",
+      fill: '#2F66D0', // theme().blue
+      fontSize: 27, // typeScale.body
+    });
+    const shape = new StubAuditNode('shape', {
+      fill: '#4E9B62', // theme().green
+    });
+    const root = new StubAuditNode('root', {
+      children: [title, sub, formula, shape],
+    });
+
+    const findings = collectThemeConsistency(root);
+    expect(findings).toHaveLength(0);
+  });
+
+  it('flags arbitrary off-palette hex colors with an advisory finding', () => {
+    const rogue = new StubAuditNode('rogue', {
+      text: 'Special text',
+      fill: '#FF0000', // Pure red, not in theme()
+      fontSize: 27,
+    });
+    const root = new StubAuditNode('root', {children: [rogue]});
+
+    const findings = collectThemeConsistency(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].ruleId).toBe('theme-color-consistency');
+    expect(findings[0].severity).toBe('advisory');
+    expect(findings[0].entities).toEqual(['rogue']);
+    expect(findings[0].message).toContain('off-palette color "#ff0000"');
+  });
+
+  it('respects active theme overrides set via setTheme()', () => {
+    setTheme({blue: '#0055FF'});
+    const custom = new StubAuditNode('custom', {
+      text: 'Custom blue',
+      fill: '#0055FF',
+      fontSize: 26,
+    });
+    const root = new StubAuditNode('root', {children: [custom]});
+
+    expect(collectThemeConsistency(root)).toHaveLength(0);
+  });
+
+  it('flags font sizes that do not match any typeScale role', () => {
+    const oddText = new StubAuditNode('oddText', {
+      text: 'Weird size',
+      fill: '#151922',
+      fontSize: 47, // Arbitrary size, not 20, 25, 26, 27, 32, 60
+    });
+    const root = new StubAuditNode('root', {children: [oddText]});
+
+    const findings = collectThemeConsistency(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].ruleId).toBe('theme-typography-scale');
+    expect(findings[0].severity).toBe('advisory');
+    expect(findings[0].entities).toEqual(['oddText']);
+    expect(findings[0].message).toContain('fontSize 47px');
+  });
+
+  it('flags both color and typography violations on the same node independently', () => {
+    const broken = new StubAuditNode('broken', {
+      text: 'Double offender',
+      fill: '#991100', // off-palette
+      fontSize: 14, // off-scale
+    });
+    const root = new StubAuditNode('root', {children: [broken]});
+
+    const findings = collectThemeConsistency(root);
+    expect(findings).toHaveLength(2);
+    expect(findings.map(f => f.ruleId).sort()).toEqual([
+      'theme-color-consistency',
+      'theme-typography-scale',
+    ]);
+    expect(findings.every(f => f.severity === 'advisory')).toBe(true);
+  });
+
+  it('ignores invisible nodes', () => {
+    const hidden = new StubAuditNode('hidden', {
+      text: 'Hidden text',
+      fill: '#FF0000',
+      fontSize: 13,
+      opacity: 0,
+    });
+    const root = new StubAuditNode('root', {children: [hidden]});
+
+    expect(collectThemeConsistency(root)).toHaveLength(0);
   });
 });

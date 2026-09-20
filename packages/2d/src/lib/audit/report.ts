@@ -1,6 +1,6 @@
 import type {BBox} from '@ovacanvas/core';
 import {collectCollisions, collectMayTouchReasonErrors} from './collisions';
-import {collectColorOveruse} from './colorDiscipline';
+import {collectColorOveruse, collectThemeConsistency} from './colorDiscipline';
 import {collectCompositionFindings} from './composition';
 import {collectCoverageGaps, collectUnregisteredVisibleNodes} from './coverage';
 import {collectRouteCollisions} from './routes';
@@ -63,6 +63,11 @@ export interface RunAuditOptions {
    * see `composition.ts`.
    */
   readonly includeComposition?: boolean;
+  /**
+   * Include the advisory theme consistency checks (palette token matching,
+   * typography typeScale compliance).
+   */
+  readonly includeThemeConsistency?: boolean;
 }
 
 /**
@@ -95,6 +100,9 @@ export function evaluateVisualAudit(options: RunAuditOptions): AuditReport {
     ...(options.root ? collectColorOveruse(options.root) : []),
     ...(options.includeComposition
       ? collectCompositionFindings(options.items, options.safeArea)
+      : []),
+    ...(options.root && options.includeThemeConsistency
+      ? collectThemeConsistency(options.root)
       : []),
   ];
   return {

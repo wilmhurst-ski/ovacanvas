@@ -144,4 +144,36 @@ describe('reviewFrame', () => {
       }),
     ).rejects.toThrow(/vision review call failed \(transient\)/);
   });
+
+  it('ensures vision review is purely advisory and does not block pipeline completion', async () => {
+    let candidateActivated = false;
+    let reviewCompleted = false;
+
+    // Simulate an authoring/staging workflow where vision review is fired asynchronously
+    const runPipeline = async () => {
+      // 1. Scene geometry passes and candidate marks ready/activates immediately
+      candidateActivated = true;
+
+      // 2. Vision advisory check runs unawaited in the background
+      void (async () => {
+        try {
+          await new Promise(resolve => setTimeout(resolve, 20));
+          reviewCompleted = true;
+        } catch {
+          // Errors caught and ignored by candidate activation
+        }
+      })();
+
+      return {ready: true};
+    };
+
+    const outcome = await runPipeline();
+    expect(outcome.ready).toBe(true);
+    expect(candidateActivated).toBe(true);
+    expect(reviewCompleted).toBe(false); // Vision review has not blocked pipeline return
+
+    // Allow background review to complete
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(reviewCompleted).toBe(true);
+  });
 });

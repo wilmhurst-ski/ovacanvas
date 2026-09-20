@@ -60,8 +60,9 @@ class DeferredAdapter
 
   /** Let whichever `prepare` call is waiting finish. */
   public settle(): void {
-    if (!this.pendingLabel || !this.release)
-      {throw new Error('nothing pending to settle');}
+    if (!this.pendingLabel || !this.release) {
+      throw new Error('nothing pending to settle');
+    }
     this.pendingLabel = null;
     const release = this.release;
     this.release = null;
@@ -210,6 +211,41 @@ describe('BeatStagingCoordinator', () => {
     expect(coordinator.current?.label).toBe('beat-1');
   });
 
+  it('activates candidate immediately even if an advisory check is slow or throws', async () => {
+    let advisoryErrorCaught = false;
+
+    const advisoryAdapter: PresentationAdapter<
+      LessonState,
+      FakePresentation,
+      ChunkRequest
+    > = {
+      async prepare(context, req) {
+        context.markReady(); // Ready immediately
+        // Non-blocking background advisory check (same unawaited fire-and-forget pattern as BeatAdapter)
+        void (async () => {
+          try {
+            await new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('vision timeout')), 50),
+            );
+          } catch {
+            advisoryErrorCaught = true;
+          }
+        })();
+        return {label: req.beat.id, disposeCount: 0};
+      },
+      dispose() {},
+    };
+
+    const {coordinator} = setup(advisoryAdapter, 1);
+    const stageResult = await coordinator.stage(request('beat-1'));
+    expect(stageResult.ok).toBe(true);
+    const activateResult = await coordinator.activate();
+    expect(activateResult.ok).toBe(true);
+    expect(coordinator.current?.label).toBe('beat-1');
+    await new Promise(resolve => setTimeout(resolve, 60));
+    expect(advisoryErrorCaught).toBe(true);
+  });
+
   describe('retry budget', () => {
     it('charges an attempt for a real preparation failure and clears it on success', async () => {
       const adapter = new ScriptedAdapter(['throw', 'ready']);
@@ -248,8 +284,9 @@ describe('BeatStagingCoordinator', () => {
       const third = await coordinator.stage(request('beat-1'));
       expect(third.ok).toBe(false);
       if (!third.ok) expect(third.reason).toBe('attempts-exhausted');
-      if (!third.ok && third.reason === 'attempts-exhausted')
-        {expect(third.attempts).toBe(2);}
+      if (!third.ok && third.reason === 'attempts-exhausted') {
+        expect(third.attempts).toBe(2);
+      }
       // The budget check refused before ever calling the adapter a third time.
       expect(adapter.calls).toBe(2);
     });
@@ -315,8 +352,9 @@ describe('BeatStagingCoordinator', () => {
       // Without forgetting, the budget (1) is already spent.
       const stillExhausted = await coordinator.stage(request('beat-1'));
       expect(stillExhausted.ok).toBe(false);
-      if (!stillExhausted.ok)
-        {expect(stillExhausted.reason).toBe('attempts-exhausted');}
+      if (!stillExhausted.ok) {
+        expect(stillExhausted.reason).toBe('attempts-exhausted');
+      }
 
       coordinator.forgetAttempts('beat-1');
       const afterForgetting = await coordinator.stage(request('beat-1'));

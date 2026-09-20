@@ -28,8 +28,9 @@ function resolvePackageDir(spec: string, fromDir: string): string {
   let dir = fs.realpathSync(path.dirname(entry));
   while (!fs.existsSync(path.join(dir, 'package.json'))) {
     const parent = path.dirname(dir);
-    if (parent === dir)
-      {throw new Error(`could not locate package root for ${spec}`);}
+    if (parent === dir) {
+      throw new Error(`could not locate package root for ${spec}`);
+    }
     dir = parent;
   }
   return dir;
@@ -198,7 +199,26 @@ COORDINATE TYPES - when you compute a coordinate you will reuse, store it as an 
 
 TIMING - keep the whole beat under about 4.5 seconds of yield*/waitFor time. The hard cap is 6s and going over it cannot be repaired mechanically, so it always costs a whole regeneration. A title plus one clear diagram plus at most a couple of supporting labels is the right density for one beat; this is one held idea, not a whole lesson.
 
-MATHS - use Latex, never Txt, for any equation, formula or exponent; plain-text maths notation is rejected by a real check. Latex supports real subexpression morphing: wrap the pieces you want addressable in {{...}}, e.g. tex: '{{y=}}{{a}}{{x^2}}', then yield* equation.tex('{{y=}}{{a}}{{x^2}} + {{bx}}', 1) morphs the rendered glyphs in place, matching pieces that appear in both strings. Keep the {{...}} split consistent across every .tex() call on the same node.`;
+MATHS - use Latex, never Txt, for any equation, formula or exponent; plain-text maths notation is rejected by a real check. Latex supports real subexpression morphing: wrap the pieces you want addressable in {{...}}, e.g. tex: '{{y=}}{{a}}{{x^2}}', then yield* equation.tex('{{y=}}{{a}}{{x^2}} + {{bx}}', 1) morphs the rendered glyphs in place, matching pieces that appear in both strings. Keep the {{...}} split consistent across every .tex() call on the same node.
+
+CHOREOGRAPHY - for any beat with sequenced operations across entities (splits, merges, duplications, replacements, summarizations, or transforms), export a choreographyPlan:
+  export const choreographyPlan = {
+    entities: [
+      {id: 'boxA', role: 'subject', lineage: 'root', recognizableBy: ['main card']},
+    ],
+    transitions: [
+      {
+        id: 't1',
+        sourceIds: ['boxA'],
+        targetIds: ['boxA'],
+        operation: 'translate',
+        preserves: ['scale'],
+        changes: ['position'],
+        purpose: 'slide card into focus',
+        holdAfter: 'hold_t1',
+      },
+    ],
+  };`;
 
 /**
  * The full code-generation prompt: the module contract plus whatever API

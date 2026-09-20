@@ -65,6 +65,10 @@ export interface CompositionThresholds {
   readonly maxUnalignedFraction: number;
   /** The band at the top of the board reserved for a heading. */
   readonly titleZoneHeight: number;
+  /** Maximum fraction of items allowed to cluster in a single quadrant (corner-cramming). */
+  readonly cornerCrammingThreshold?: number;
+  /** Maximum penetration allowed past the title zone boundary before reporting invasion. */
+  readonly titleZoneMargin?: number;
 }
 
 /**
@@ -80,7 +84,43 @@ export const DEFAULT_COMPOSITION_THRESHOLDS: CompositionThresholds = {
   alignmentTolerance: 12,
   maxUnalignedFraction: 0.75,
   titleZoneHeight: 150,
+  cornerCrammingThreshold: 0.9,
+  titleZoneMargin: 25,
 };
+
+/**
+ * Scales composition thresholds as a function of entity count and safe area,
+ * preventing false positives on both deliberately minimal single-entity beats
+ * and deliberately dense multi-entity beats (Mandate 2).
+ */
+export function dynamicCompositionThresholds(
+  itemCount: number,
+  _safeArea: BBox | readonly BBox[],
+  base: CompositionThresholds = DEFAULT_COMPOSITION_THRESHOLDS,
+): CompositionThresholds {
+  const count = Math.max(1, itemCount);
+
+  const minOccupancy = count === 1 ? 0.02 : base.minOccupancy;
+
+  const maxOccupancy =
+    count <= 5
+      ? base.maxOccupancy
+      : Math.min(0.58, base.maxOccupancy + (count - 5) * 0.016);
+
+  const minBreathingRoom =
+    count <= 6
+      ? base.minBreathingRoom
+      : Math.max(35, base.minBreathingRoom - (count - 6) * 2);
+
+  return {
+    ...base,
+    minOccupancy,
+    maxOccupancy,
+    minBreathingRoom,
+    cornerCrammingThreshold: base.cornerCrammingThreshold ?? 0.9,
+    titleZoneMargin: base.titleZoneMargin ?? 25,
+  };
+}
 
 /**
  * The part of the board content is actually composed into: the safe area
@@ -222,10 +262,16 @@ export function collectCompositionFindings(
   const measured = measureComposition(items, safeArea, thresholds);
   if (measured.contentBox === null) return [];
 
-  const findings: AuditFinding[] = [];
-  const {occupancy, breathingRoom, unalignedFraction, useful} = measured;
+  const effective = dynamicCompositionThresholds(
+    measured.visibleItems,
+    safeArea,
+    thresholds,
+  );
 
-  if (occupancy < thresholds.minOccupancy) {
+  const findings: AuditFinding[] = [];
+  const {occupancy, unalignedFraction, useful} = measured;
+
+  if (occupancy < effective.minOccupancy) {
     findings.push({
       ruleId: 'composition-occupancy',
       severity: 'advisory',
@@ -233,10 +279,10 @@ export function collectCompositionFindings(
       geometry: measured.contentBox,
       message:
         `Content covers ${(occupancy * 100).toFixed(1)}% of the usable board ` +
-        `(under ${(thresholds.minOccupancy * 100).toFixed(0)}%). The board reads as empty and ` +
+        `(under ${(effective.minOccupancy * 100).toFixed(0)}%). The board reads as empty and ` +
         'the content as incidental - spread it out, or make it larger.',
     });
-  } else if (occupancy > thresholds.maxOccupancy) {
+  } else if (occupancy > effective.maxOccupancy) {
     findings.push({
       ruleId: 'composition-occupancy',
       severity: 'advisory',
@@ -244,38 +290,61 @@ export function collectCompositionFindings(
       geometry: measured.contentBox,
       message:
         `Content covers ${(occupancy * 100).toFixed(1)}% of the usable board ` +
-        `(over ${(thresholds.maxOccupancy * 100).toFixed(0)}%). There is no breathing room left - ` +
+        `(over ${(effective.maxOccupancy * 100).toFixed(0)}%). There is no breathing room left - ` +
         'remove something, or give the pieces more space between them.',
     });
   }
 
-  if (breathingRoom < thresholds.minBreathingRoom) {
-    const sides: string[] = [];
-    if (measured.contentBox.left - useful.left < thresholds.minBreathingRoom)
-      {sides.push('left');}
-    if (useful.right - measured.contentBox.right < thresholds.minBreathingRoom)
-      {sides.push('right');}
-    if (measured.contentBox.top - useful.top < thresholds.minBreathingRoom)
-      {sides.push('top');}
-    if (
-      useful.bottom - measured.contentBox.bottom <
-      thresholds.minBreathingRoom
-    )
-      {sides.push('bottom');}
+  // Title zone invasion check
+  const titleZoneMargin = effective.titleZoneMargin ?? 25;
+  let hasTitleInvasion = false;
+  for (const box of composedBoxes(items, useful)) {
+    if (box.top < useful.top - titleZoneMargin) {
+      hasTitleInvasion = true;
+      findings.push({
+        ruleId: 'composition-title-invasion',
+        severity: 'advisory',
+        entities: [],
+        geometry: box,
+        message:
+          `Content invades the reserved title band at the top of the board by ${Math.round(useful.top - box.top)}px. ` +
+          'Keep content below the title zone so it does not collide with the heading.',
+      });
+      break;
+    }
+  }
+
+  const edgeMargins = [
+    {side: 'left', margin: measured.contentBox.left - useful.left},
+    {side: 'right', margin: useful.right - measured.contentBox.right},
+    {side: 'bottom', margin: useful.bottom - measured.contentBox.bottom},
+  ];
+  if (!hasTitleInvasion) {
+    edgeMargins.push({
+      side: 'top',
+      margin: measured.contentBox.top - useful.top,
+    });
+  }
+  const minEdgeMargin = Math.min(...edgeMargins.map(m => m.margin));
+  const crampedSides = edgeMargins
+    .filter(m => m.margin < effective.minBreathingRoom)
+    .map(m => m.side);
+
+  if (crampedSides.length > 0) {
     findings.push({
       ruleId: 'composition-breathing-room',
       severity: 'advisory',
       entities: [],
       geometry: measured.contentBox,
       message:
-        `Content leaves ${Math.round(breathingRoom)}px of margin on the ${sides.join('/')} ` +
-        `(want at least ${thresholds.minBreathingRoom}px). The layout is pressed against the edge of the board.`,
+        `Content leaves ${Math.round(minEdgeMargin)}px of margin on the ${crampedSides.join('/')} ` +
+        `(want at least ${effective.minBreathingRoom}px). The layout is pressed against the edge of the board.`,
     });
   }
 
   if (
     measured.visibleItems >= MIN_ITEMS_FOR_ALIGNMENT &&
-    unalignedFraction > thresholds.maxUnalignedFraction
+    unalignedFraction > effective.maxUnalignedFraction
   ) {
     findings.push({
       ruleId: 'composition-alignment',
@@ -286,6 +355,39 @@ export function collectCompositionFindings(
         `${Math.round(unalignedFraction * 100)}% of items share no horizontal or vertical axis ` +
         'with any other item. Nothing lines up, which reads as scattered rather than composed.',
     });
+  }
+
+  // Quadrant clustering / corner-cramming check
+  const cornerThreshold = effective.cornerCrammingThreshold ?? 0.9;
+  if (measured.visibleItems >= 3) {
+    const usefulCenter = useful.center;
+    let qTL = 0;
+    let qTR = 0;
+    let qBL = 0;
+    let qBR = 0;
+    for (const box of composedBoxes(items, useful)) {
+      const c = box.center;
+      if (c.x < usefulCenter.x) {
+        if (c.y < usefulCenter.y) qTL++;
+        else qBL++;
+      } else {
+        if (c.y < usefulCenter.y) qTR++;
+        else qBR++;
+      }
+    }
+    const maxQuadrantCount = Math.max(qTL, qTR, qBL, qBR);
+    const clusteringRatio = maxQuadrantCount / measured.visibleItems;
+    if (clusteringRatio >= cornerThreshold) {
+      findings.push({
+        ruleId: 'composition-corner-cramming',
+        severity: 'advisory',
+        entities: [],
+        geometry: measured.contentBox,
+        message:
+          `${Math.round(clusteringRatio * 100)}% of content is clustered into a single quadrant ` +
+          'of the usable board. The content is crammed into one corner while the rest of the board is empty.',
+      });
+    }
   }
 
   return findings;

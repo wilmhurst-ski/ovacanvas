@@ -1,4 +1,10 @@
-import type {AuditFinding, AuditItem, RouteItem, View2D} from '@ovacanvas/2d';
+import type {
+  AuditFinding,
+  AuditItem,
+  ChoreographyPlan,
+  RouteItem,
+  View2D,
+} from '@ovacanvas/2d';
 import type {BBox, ThreadGeneratorFactory} from '@ovacanvas/core';
 
 /**
@@ -48,6 +54,7 @@ export interface BeatManifest {
   readonly id: string;
   readonly title: string;
   readonly runner: ThreadGeneratorFactory<View2D>;
+  readonly choreographyPlan?: ChoreographyPlan;
   buildAuditSpec(view: View2D): BeatAuditSpec;
 
   /**

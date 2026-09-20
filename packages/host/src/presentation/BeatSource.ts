@@ -1,4 +1,4 @@
-import type {View2D} from '@ovacanvas/2d';
+import type {ChoreographyPlan, View2D} from '@ovacanvas/2d';
 import * as ovacanvas2d from '@ovacanvas/2d';
 import type {ThreadGeneratorFactory} from '@ovacanvas/core';
 import * as ovacanvasCore from '@ovacanvas/core';
@@ -8,6 +8,7 @@ import type {BeatAuditSpec, BeatManifest} from './BeatManifest';
 interface CompiledBeatModule {
   default?: unknown;
   buildAuditSpec?: (view: View2D) => BeatAuditSpec;
+  choreographyPlan?: ChoreographyPlan;
 }
 
 /**
@@ -79,5 +80,15 @@ export async function resolveBeatSource(
     throw new Error(`beat ${id} does not export buildAuditSpec(view)`);
   }
 
-  return {id, title, runner, buildAuditSpec: module.exports.buildAuditSpec};
+  if (module.exports.choreographyPlan) {
+    ovacanvas2d.validateChoreographyPlan(module.exports.choreographyPlan);
+  }
+
+  return {
+    id,
+    title,
+    runner,
+    buildAuditSpec: module.exports.buildAuditSpec,
+    choreographyPlan: module.exports.choreographyPlan,
+  };
 }

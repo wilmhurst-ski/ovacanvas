@@ -37,8 +37,9 @@ function scene(
   const nodes = withTitle
     ? [{x: TITLE.x, y: TITLE.y, w: TITLE.width, h: TITLE.height}]
     : [];
-  for (const [x, y, width, height] of placements)
-    {nodes.push({x, y, w: width, h: height});}
+  for (const [x, y, width, height] of placements) {
+    nodes.push({x, y, w: width, h: height});
+  }
   return nodes.map((node, index) => {
     const stub = new StubAuditNode(`item-${index}`, {
       x: node.x,
@@ -96,7 +97,11 @@ const CORPUS: readonly Fixture[] = [
   },
   {
     name: 'bad: everything crammed into one corner',
-    expectRules: ['composition-occupancy', 'composition-breathing-room'],
+    expectRules: [
+      'composition-occupancy',
+      'composition-breathing-room',
+      'composition-corner-cramming',
+    ],
     items: scene([
       [180, 950, 160, 100],
       [360, 950, 160, 100],
@@ -134,6 +139,40 @@ const CORPUS: readonly Fixture[] = [
       [1500, 660, 140, 100],
       [600, 860, 140, 100],
       [1250, 890, 140, 100],
+    ]),
+  },
+  {
+    name: 'good: deliberately dense 15-entity well-composed grid',
+    expectRules: [],
+    items: scene([
+      [220, 360, 220, 160],
+      [590, 360, 220, 160],
+      [960, 360, 220, 160],
+      [1330, 360, 220, 160],
+      [1700, 360, 220, 160],
+      [220, 590, 220, 160],
+      [590, 590, 220, 160],
+      [960, 590, 220, 160],
+      [1330, 590, 220, 160],
+      [1700, 590, 220, 160],
+      [220, 820, 220, 160],
+      [590, 820, 220, 160],
+      [960, 820, 220, 160],
+      [1330, 820, 220, 160],
+      [1700, 820, 220, 160],
+    ]),
+  },
+  {
+    name: 'good: deliberately minimal single-shape beat',
+    expectRules: [],
+    items: scene([[960, 600, 180, 180]]),
+  },
+  {
+    name: 'bad: content invading the title zone',
+    expectRules: ['composition-title-invasion'],
+    items: scene([
+      [960, 200, 400, 160],
+      [960, 520, 400, 200],
     ]),
   },
 ];

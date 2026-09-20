@@ -2,10 +2,11 @@ import {
   auditStaticChecksAcrossFrames,
   evaluateVisualAudit,
   transitionSampleFrames,
+  validateChoreographyPlan,
   type AuditFinding,
   type AuditItem,
   type AuditReport,
-} from '@ovacanvas/2d';
+} from '@ovacanvas/2d/lib/audit';
 import type {
   PreparationContext,
   PresentationAdapter,
@@ -77,6 +78,10 @@ export class BeatAdapter
   ): Promise<BeatPresentation> {
     let presentation: BeatPresentation | null = null;
     try {
+      if (request.beat.choreographyPlan) {
+        validateChoreographyPlan(request.beat.choreographyPlan);
+      }
+
       presentation = new BeatPresentation(request.beat);
 
       // Readiness is a real rendered frame, not a returned constructor.
@@ -395,8 +400,9 @@ export class BeatAdapter
       // animation that is working exactly as authored.
       const scene = presentation.player.playback
         .currentScene as unknown as SceneWithDuration;
-      if (Math.round(presentation.player.playback.frame) !== scene.firstFrame)
-        {return;}
+      if (Math.round(presentation.player.playback.frame) !== scene.firstFrame) {
+        return;
+      }
       if (reapplications >= MAX_GEOMETRY_REAPPLICATIONS) return;
 
       const items = rebuild();

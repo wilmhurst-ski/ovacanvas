@@ -18,6 +18,8 @@ export interface StubAuditNodeProps {
    * a check that duck-types on `.hex()` exercises the real interface.
    */
   fill?: string;
+  /** When provided, this stub satisfies `AuditableNode.fontSize`, modeling `Layout.fontSize`. */
+  fontSize?: number;
   /**
    * When true, this stub satisfies `AuditableNode.startAngle`/`.endAngle`
    * as a full (0-360) circle, modeling a real `Circle` for the collision
@@ -55,6 +57,7 @@ export class StubAuditNode implements AuditableNode {
   public readonly text?: () => string;
   public readonly tex?: () => string;
   public readonly fill?: () => Color;
+  public readonly fontSize?: () => number;
   public readonly startAngle?: () => number;
   public readonly endAngle?: () => number;
   public readonly parsedPoints?: () => readonly Vector2[];
@@ -98,6 +101,10 @@ export class StubAuditNode implements AuditableNode {
     if (props.fill !== undefined) {
       const color = new Color(props.fill);
       this.fill = () => color;
+    }
+    if (props.fontSize !== undefined) {
+      const size = props.fontSize;
+      this.fontSize = () => size;
     }
   }
 

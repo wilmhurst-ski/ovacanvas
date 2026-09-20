@@ -176,6 +176,34 @@ export function buildAuditSpec() {
     safeArea: new BBox(60, 60, 1800, 960),
   };
 }
+${
+  rest.length > 0
+    ? `
+export const choreographyPlan = {
+  entities: [
+    {id: 'title', role: 'context', lineage: 'root', recognizableBy: ['title text']},
+    {id: 'equation', role: 'subject', lineage: 'root', recognizableBy: ['LaTeX equation']},
+    {id: 'note', role: 'evidence', lineage: 'root', recognizableBy: ['step note']},
+  ],
+  transitions: [
+${rest
+  .map(
+    (step, idx) => `    {
+      id: 'step_${idx + 1}',
+      sourceIds: ['equation'],
+      targetIds: ['equation'],
+      operation: 'deform',
+      preserves: ['position'],
+      changes: ['terms'],
+      purpose: ${JSON.stringify(step.note || `morph equation to step ${idx + 2}`)},
+      holdAfter: 'hold_step_${idx + 1}',
+    },`,
+  )
+  .join('\n')}
+  ],
+};`
+    : ''
+}
 `;
 }
 
