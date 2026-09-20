@@ -48,6 +48,34 @@ export class DependencyContext<TOwner = void>
     return this.promises.length > 0;
   }
 
+  /**
+   * A diagnostic snapshot of the async signal work still in flight.
+   *
+   * @remarks
+   * Exists so a host whose scene never settles (a render that times out with
+   * no logged error) can tell "genuinely slow" apart from "waiting on a
+   * promise that will never resolve", and name the subsystem responsible.
+   * Purely observational - it changes nothing about scheduling. Only promise
+   * index and creation site are exposed: `handle.value` can hold anything and
+   * is not a stable shape to build on.
+   */
+  public static getPendingPromiseSummaries(): readonly {
+    index: number;
+    site: string;
+  }[] {
+    return this.promises.map((handle, index) => {
+      const site =
+        handle.stack
+          ?.split('\n')
+          .map(line => line.trim())
+          .filter(
+            line => line.startsWith('at ') && !line.includes('collectPromise'),
+          )[0]
+          ?.replace(/^at\s+/, '') ?? 'unknown';
+      return {index, site};
+    });
+  }
+
   public static async consumePromises() {
     const promises = [...this.promises];
     await Promise.all(promises.map(handle => handle.promise));

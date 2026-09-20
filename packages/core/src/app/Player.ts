@@ -399,6 +399,12 @@ export class Player {
    * destroys the shared WebGL context and therefore cannot be resumed without
    * rebuilding GPU resources.
    */
+  /**
+   * Stop the update loop and cancel any frame already requested.
+   *
+   * @remarks
+   * Scheduling is the only thing this releases; it owns no resources.
+   */
   public sleep() {
     if (this.disposed) return;
     this.stopScheduling();
@@ -416,12 +422,6 @@ export class Player {
     this.activate();
   }
 
-  /**
-   * Stop the update loop and cancel any frame already requested.
-   *
-   * @remarks
-   * Scheduling is the only thing this releases; it owns no resources.
-   */
   /**
    * Permanently release every resource this player owns.
    *

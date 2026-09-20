@@ -8,6 +8,7 @@ export * from './any';
 export * from './chain';
 export * from './delay';
 export * from './every';
+export * from './growThrough';
 export * from './loop';
 export * from './loopFor';
 export * from './loopUntil';
