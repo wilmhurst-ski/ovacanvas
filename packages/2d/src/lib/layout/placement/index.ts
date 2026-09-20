@@ -9,4 +9,3 @@ export {
 export * from './arrangeWithoutOverlap';
 export * from './distributeOrbiting';
 export * from './rectCollide';
-export * from './segmentPlacement';
