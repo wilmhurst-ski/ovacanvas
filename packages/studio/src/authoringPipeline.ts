@@ -1,6 +1,7 @@
 import {
-  compileBeatModule,
+  authorBeat,
   type CompileDiagnostic,
+  type ResolveBeatModule,
 } from '@ovacanvas/host/authoring';
 import {compileEquationSolveSource} from './authoring/strategies/equationIntent/compiler';
 import {validateEquationSolveIntent} from './authoring/strategies/equationIntent/intent';
@@ -149,6 +150,8 @@ export interface AuthorOptions {
   readonly initialFeedback?: string;
   /** Injected so tests can drive the whole loop without a network. */
   readonly fetchImpl?: typeof fetch;
+  /** Optional custom beat resolver */
+  readonly resolve?: ResolveBeatModule;
 }
 
 /**
@@ -286,10 +289,10 @@ export function buildFeedback(
  * through to the provider. That is the whole safety story: `solveLinear` never
  * guesses, so this can never produce a confident wrong answer.
  */
-function solveWithoutModel(
+async function solveWithoutModel(
   topic: string,
   projectRoot: string,
-): AuthorSuccess | null {
+): Promise<AuthorSuccess | null> {
   // Tried in order of how common the question is. Each solver refuses
   // anything that is not its shape - linear rejects a `^`, quadratic rejects a
   // `/`, rational requires one - so they cannot disagree about who owns a
@@ -307,25 +310,29 @@ function solveWithoutModel(
   });
   if (!validated.ok) return null;
 
-  const compiled = compileBeatModule(
-    compileEquationSolveSource(validated.intent),
+  const source = compileEquationSolveSource(validated.intent);
+  const authored = await authorBeat({
+    id: '__solved__',
+    title: solved.title,
+    source,
     projectRoot,
-    '__solved__.ts',
-  );
+    virtualFileName: '__solved__.ts',
+    resolve: async (id, title) => ({id, title}) as any,
+  });
   // If it somehow does not compile, fall through rather than fail. The
   // deterministic path must never be the reason a question goes unanswered -
   // it is an optimisation, and an optimisation that can break the product is
   // not one.
-  if (!compiled.ok) return null;
+  if (!authored.ok) return null;
 
   return {
     ok: true,
     strategy: 'equation-intent',
-    source: compileEquationSolveSource(validated.intent),
+    source,
     intent: validated.intent,
-    code: compiled.code,
+    code: authored.code,
     attempts: 0,
-    repaired: compiled.repaired,
+    repaired: authored.repaired,
     provider: 'none',
     model: 'none',
     usage: null,
@@ -345,7 +352,7 @@ export async function authorWithRetry(
 ): Promise<AuthorOutcome> {
   const env = options.env ?? process.env;
 
-  const solved = solveWithoutModel(options.topic, options.projectRoot);
+  const solved = await solveWithoutModel(options.topic, options.projectRoot);
   if (solved) return solved;
   const spec: ProviderSpec = selectProvider(options.provider, env);
   const apiKey = env[spec.envKey];
@@ -473,52 +480,64 @@ export async function authorWithRetry(
     }
 
     const {source, intent} = interpretation.extraction;
-    const compiled = compileBeatModule(
+    const authored = await authorBeat({
+      id: '__authored__',
+      title: options.topic,
       source,
-      options.projectRoot,
-      '__authored__.ts',
-    );
+      projectRoot: options.projectRoot,
+      virtualFileName: '__authored__.ts',
+      resolve:
+        options.resolve ??
+        (async (id, title, code) => {
+          const missing = missingBeatExports(code);
+          if (missing.length > 0) {
+            throw new Error(
+              `The module compiled but is not a beat module - it is missing ${missing.join(' and ')}. ` +
+                'Output the full module in the required shape.',
+            );
+          }
+          return {id, title} as any;
+        }),
+    });
 
-    if (compiled.ok) {
-      const missing = missingBeatExports(compiled.code);
-      if (missing.length === 0) {
-        log.push({
-          attempt: contentAttempts,
-          outcome: 'accepted',
-          detail: 'compiled',
-          usage: result.usage,
-        });
-        return {
-          ok: true,
-          strategy: strategyId,
-          source,
-          intent,
-          code: compiled.code,
-          attempts: contentAttempts,
-          repaired: compiled.repaired,
-          provider: spec.id,
-          model,
-          usage,
-          log,
-        };
-      }
-      feedback =
-        `The module compiled but is not a beat module - it is missing ${missing.join(' and ')}. ` +
-        'Output the full module in the required shape.';
+    if (authored.ok) {
+      log.push({
+        attempt: contentAttempts,
+        outcome: 'accepted',
+        detail: 'compiled',
+        usage: result.usage,
+      });
+      return {
+        ok: true,
+        strategy: strategyId,
+        source,
+        intent,
+        code: authored.code,
+        attempts: contentAttempts,
+        repaired: authored.repaired,
+        provider: spec.id,
+        model,
+        usage,
+        log,
+      };
+    }
+
+    if (authored.stage === 'resolve') {
+      feedback = authored.message;
       log.push({
         attempt: contentAttempts,
         outcome: 'compile-failed',
-        detail: `missing ${missing.join(', ')}`,
+        detail: authored.message,
         usage: result.usage,
       });
       continue;
     }
 
-    feedback = buildFeedback(compiled.diagnostics);
+    feedback = buildFeedback(authored.diagnostics);
     log.push({
       attempt: contentAttempts,
       outcome: 'compile-failed',
-      detail: compiled.diagnostics
+      detail: authored.diagnostics
         .map(d => d.message)
         .join(' | ')
         .slice(0, 400),
