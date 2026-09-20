@@ -35,9 +35,18 @@ export interface LayoutEdge {
 }
 
 export interface GraphLayoutResult {
-  readonly kind: 'layered' | 'force';
+  readonly kind: 'layered' | 'force' | 'radial';
   readonly vertices: readonly LayoutVertex[];
   readonly edges: readonly LayoutEdge[];
+}
+
+export interface RadialLayoutConfig {
+  readonly centerX?: number;
+  readonly centerY?: number;
+  readonly layerRadius?: number;
+  readonly startAngle?: number;
+  readonly endAngle?: number;
+  readonly rootId?: string;
 }
 
 export type LayerDirection = 'TB' | 'BT' | 'LR' | 'RL';
