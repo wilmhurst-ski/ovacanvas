@@ -153,6 +153,10 @@ export type GeometryErrorCode =
   | 'COLLINEAR_POINT_SET'
   /** A Voronoi seed lay outside the clipping bounds. */
   | 'SEED_OUTSIDE_BOUNDS'
+  /** A cut/scale fraction was not a finite number strictly between 0 and 1. */
+  | 'INVALID_RATIO'
+  /** An iteration count was not a positive integer. */
+  | 'INVALID_ITERATION_COUNT'
   /** The kernel returned something that is not valid finite geometry. */
   | 'OPERATION_FAILED';
 

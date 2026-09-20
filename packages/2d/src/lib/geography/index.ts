@@ -28,7 +28,8 @@
 
 export * from './labels/mapLabelPlacement';
 export * from './nodes';
-export * from './public/fingerprint';
+export * from './public/projectionKey';
 export * from './public/types';
+export * from './public/worldData';
 export * from './routes/rhumb';
 export * from './routes/routeGenerator';

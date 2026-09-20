@@ -1,5 +1,5 @@
 export * from './public/errors';
-export * from './public/fingerprint';
+export * from './public/geometryKey';
 export * from './public/types';
 
 export * from './math/bounds3';
@@ -9,9 +9,11 @@ export * from './math/quaternion';
 export * from './math/ray3';
 export * from './math/vector3';
 
+export * from './geometry/axisGeometry';
 export * from './geometry/bounds';
 export * from './geometry/canonicalize';
 export * from './geometry/normals';
+export * from './geometry/parametricSurface';
 export * from './geometry/primitives';
 
 export * from './scene/Group3D';
@@ -27,6 +29,7 @@ export * from './render/RenderList';
 export * from './render/Scene3DContextOwner';
 export * from './render/Scene3DRenderer';
 
+export * from './components/Anchored3DLabel';
 export * from './components/Scene3D';
 
 export * from './interaction/pick';

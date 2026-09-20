@@ -5,7 +5,7 @@ import {
   createProjector,
   type PrivateProjector,
 } from '../d3-adapter/projectionFactory';
-import {fingerprintProjection} from '../public/fingerprint';
+import {fingerprintProjection} from '../public/projectionKey';
 import type {
   GeoFeatureSource,
   GeoInspectionInfo,
@@ -52,9 +52,51 @@ export class GeoMap extends Node {
     super(props);
   }
 
+  /**
+   * The projection spec actually used to project this map's content.
+   *
+   * @remarks
+   * `createProjector` builds a d3 projection strictly from the spec it is
+   * given - it has no idea this map declared a `width`/`height`/`padding`.
+   * Without an explicit `scale`/`translate`/`fit`, every d3 projection kind
+   * falls back to its own classic default (built for a top-left-origin
+   * SVG viewport, e.g. orthographic's translate ~[480, 250]), which has no
+   * relationship to this node's own centered-origin local space or its
+   * declared box. This is the actual, real fix (found by rendering a
+   * bare Sphere+Graticule map and seeing a stray, off-center grid
+   * fragment, not by reading the API and guessing): fit the whole globe
+   * into this map's own declared box, centered on this node's own origin,
+   * whenever the author hasn't already taken over scale/translate/fit
+   * themselves (e.g. via `fitFeatures()`).
+   */
+  @computed()
+  public effectiveProjection(): GeoProjectionSpec {
+    const spec = this.projection();
+    if (spec.fit || spec.scale !== undefined || spec.translate !== undefined) {
+      return spec;
+    }
+
+    const w = this.width();
+    const h = this.height();
+    const pad = this.padding();
+    return {
+      ...spec,
+      fit: {
+        target: {
+          id: 'ovacanvas-geo-map-auto-fit-sphere',
+          geometry: {type: 'Sphere'},
+        },
+        extent: [
+          [-w / 2 + pad, -h / 2 + pad],
+          [w / 2 - pad, h / 2 - pad],
+        ],
+      },
+    };
+  }
+
   @computed()
   public projector(): PrivateProjector {
-    const spec = this.projection();
+    const spec = this.effectiveProjection();
     const key = fingerprintProjection(spec);
     if (!this.cachedProjector || this.cachedProjector.key !== key) {
       this.cachedProjector = {

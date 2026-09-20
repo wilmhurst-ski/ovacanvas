@@ -5,7 +5,7 @@ import {
   createProjector,
   type PrivateProjector,
 } from '../d3-adapter/projectionFactory';
-import {fingerprintProjection} from '../public/fingerprint';
+import {fingerprintProjection} from '../public/projectionKey';
 import type {GeoInspectionInfo, GeoProjectionSpec} from '../public/types';
 import type {GeoMap} from './GeoMap';
 
@@ -46,8 +46,8 @@ export class GeoMarker extends Node {
     if (explicit) return explicit;
 
     const map = this.findAncestor(node => 'isGeoMap' in node) as GeoMap | null;
-    if (map && map.projection) {
-      return map.projection();
+    if (map) {
+      return map.effectiveProjection();
     }
 
     return {kind: 'equirectangular'};

@@ -10,6 +10,7 @@ import {
   threadable,
 } from '@ovacanvas/core';
 import {computed, initial, nodeName, signal} from '../decorators';
+import {theme} from '../theme/theme';
 import {is} from '../utils';
 import {Node} from './Node';
 import {Shape, ShapeProps} from './Shape';
@@ -186,7 +187,6 @@ export class Txt extends Shape {
 }
 
 [
-  'fill',
   'stroke',
   'lineWidth',
   'strokeFirst',
@@ -202,3 +202,18 @@ export class Txt extends Shape {
     return (this.parentTxt() as any)?.[prop]() ?? initial;
   };
 });
+
+/**
+ * Text's own fill has one more fallback than the generic props above: the
+ * theme's `ink`, when there is neither a parent `Txt` to inherit from nor an
+ * explicit value. `Shape.fill` itself has no default (many shapes are
+ * legitimately unfilled), so without this a bare `new Txt({text: '...'})`
+ * fell through to whatever `fillStyle` the canvas context happened to be
+ * left at by whatever drew immediately before it - not a real default at
+ * all, just leftover context state. Scoped to `Txt` (and, separately,
+ * `Latex`) specifically: this is about text reliably defaulting to ink, not
+ * about giving every `Shape` an opinion on color it doesn't have today.
+ */
+(Txt.prototype as any).getDefaultFill = function (this: Txt, initial: unknown) {
+  return this.parentTxt()?.fill() ?? initial ?? theme().ink;
+};

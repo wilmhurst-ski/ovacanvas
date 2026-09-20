@@ -6,7 +6,7 @@ import {
 } from '../geometry/canonicalize';
 import {findDegenerateTriangles} from '../geometry/primitives';
 import {Scene3DError} from '../public/errors';
-import {fingerprintGeometry} from '../public/fingerprint';
+import {fingerprintGeometry} from '../public/geometryKey';
 import type {TriangleGeometry3D} from '../public/types';
 import {createCrossingTriangles} from './fixtures';
 

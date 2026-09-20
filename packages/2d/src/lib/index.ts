@@ -1,3 +1,4 @@
+export * from './audit';
 export * from './code';
 export * from './components';
 export * from './curves';
@@ -12,4 +13,5 @@ export * from './projection';
 export * from './scene3d';
 export {Matrix4} from './scene3d';
 export * from './scenes';
+export * from './theme';
 export * from './utils';

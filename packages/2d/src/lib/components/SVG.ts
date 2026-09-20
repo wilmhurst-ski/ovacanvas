@@ -349,9 +349,18 @@ export class SVG extends Shape {
 
   /**
    * Get the current `SVGDocument`.
+   *
+   * @remarks
+   * `protected` rather than `private` so a subclass that needs its document
+   * built at a specific moment can say so. `Latex` does, and it matters:
+   * building the document constructs real scene nodes, which requires an
+   * active scene context, and this is a memoized computed - so if its first
+   * evaluation happens somewhere without that context, the throw is swallowed
+   * and the failed result is cached as `undefined`, leaving the node
+   * permanently zero-sized with no error anywhere. See `Latex`'s constructor.
    */
   @computed()
-  private document(): SVGDocument {
+  protected document(): SVGDocument {
     try {
       const src = this.svg();
       if (this.lastTweenTargetDocument && src === this.lastTweenTargetSrc) {

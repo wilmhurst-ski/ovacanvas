@@ -7,7 +7,7 @@ import {Bounds3} from '../math/bounds3';
 import {Matrix4} from '../math/matrix4';
 import {Ray3} from '../math/ray3';
 import {Vector3} from '../math/vector3';
-import {fingerprintTriangleGeometry} from '../public/fingerprint';
+import {fingerprintTriangleGeometry} from '../public/geometryKey';
 import type {
   Material3DSpec,
   Ray3D,

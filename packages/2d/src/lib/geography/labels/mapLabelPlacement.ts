@@ -1,9 +1,14 @@
 /**
- * Map-aware collision-free label placement.
+ * Collision-free label placement.
  *
  * @remarks
- * Places labels relative to projected feature centroids, markers, or route positions,
- * testing 8-point offset candidates and optional leader lines against map obstacles.
+ * Places labels relative to any anchor point, testing 8-point offset
+ * candidates and optional leader lines against obstacles. Nothing here is
+ * map-specific - anchors are plain `[x, y]` pairs - a map feature centroid,
+ * marker or route position is just one kind of anchor. Also exposed
+ * generally from `layout/placement`, since a labelled diagram, a chart
+ * legend or an annotated equation needs the exact same "place this near
+ * that point without colliding" search that a map label does.
  */
 
 export interface LabelCandidate {
