@@ -67,7 +67,7 @@ export function forceRectCollide<TNode extends RectNodeDatum>(
     }
   }
 
-  force.initialize = (initializedNodes: Node[]) => {
+  force.initialize = (initializedNodes: TNode[]) => {
     nodes = initializedNodes;
   };
 

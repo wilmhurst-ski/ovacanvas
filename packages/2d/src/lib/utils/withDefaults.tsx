@@ -1,4 +1,4 @@
-import {FunctionComponent, NodeConstructor, PropsOf} from '../components';
+import {FunctionComponent, Node, NodeConstructor, PropsOf} from '../components';
 
 /**
  * Create a higher order component with default props.
@@ -20,7 +20,8 @@ import {FunctionComponent, NodeConstructor, PropsOf} from '../components';
 export function withDefaults<T extends FunctionComponent | NodeConstructor>(
   component: T,
   defaults: PropsOf<T>,
-) {
-  const Node = component;
-  return (props: PropsOf<T>) => <Node {...defaults} {...props} />;
+): (props: PropsOf<T>) => Node {
+  const Component = component;
+  return (props: PropsOf<T>) =>
+    (<Component {...defaults} {...props} />) as Node;
 }
