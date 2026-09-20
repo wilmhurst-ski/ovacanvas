@@ -1,0 +1,37 @@
+{
+  "name": "@ovacanvas/host",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Background-cooked, gate-audited lesson beat staging on top of OvaCanvas",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./authoring": "./lib/authoring/index.js"
+  },
+  "author": "OvaCanvas contributors",
+  "homepage": "https://github.com/wilmhurst-ski/ovacanvas",
+  "bugs": "https://github.com/wilmhurst-ski/ovacanvas/issues",
+  "license": "MIT",
+  "scripts": {
+    "dev": "tsc -p tsconfig.build.json -w",
+    "build": "node scripts/build.mjs",
+    "test": "vitest"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wilmhurst-ski/ovacanvas.git"
+  },
+  "files": [
+    "lib"
+  ],
+  "dependencies": {
+    "@ovacanvas/2d": "^3.17.2",
+    "@ovacanvas/core": "^3.17.2",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "jsdom": "^22.1.0",
+    "vitest": "^0.34.6"
+  }
+}
