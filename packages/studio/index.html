@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OvaCanvas — ask, and watch it explained</title>
+    <link rel="stylesheet" href="/src/client/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <h1>OvaCanvas</h1>
+        <p class="tagline">Ask a question. Watch it explained.</p>
+      </header>
+
+      <form class="ask" id="ask">
+        <label class="sr-only" for="question">Your question</label>
+        <input
+          id="question"
+          name="question"
+          type="text"
+          autocomplete="off"
+          placeholder="e.g. why does a derivative measure a rate of change?"
+          required
+        />
+        <button type="submit" id="ask-button">Explain</button>
+      </form>
+
+      <div class="stage-wrap">
+        <div class="stage" id="stage" aria-live="polite"></div>
+      </div>
+
+      <footer class="status-bar">
+        <span class="dot" id="dot" data-state="idle"></span>
+        <span id="status">Ready.</span>
+        <span class="meta" id="meta"></span>
+      </footer>
+    </main>
+
+    <script type="module" src="/src/client/main.ts"></script>
+  </body>
+</html>

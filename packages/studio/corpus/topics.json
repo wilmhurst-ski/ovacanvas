@@ -1,0 +1,66 @@
+{
+  "version": "1.2.0",
+  "note": "A fixed, versioned topic set. Run it on every engine or prompt change and compare against the previous run - a topic that used to pass and now does not is a regression, and ad hoc spot-checks will not tell you that. Bump the version when a topic is added, removed, or reworded, because that changes what a stored result means. 1.2.0: all four maths topics are now solved in code with no provider - linear, quadratic and rational - so they report CODE rather than FIRST and measure the deterministic solvers instead of the model. That is a real change in what those rows mean, which is why the version moved twice. CONSEQUENCE WORTH KNOWING: the corpus no longer measures the model's equation handling at all, because every equation topic in this set is one the solvers handle. Model coverage now comes only from the six non-STEM topics. If that matters, add a maths topic the solvers refuse - a cubic, or two fractions summed on one side like 1/x + 1/(x+1) = 1.",
+  "topics": [
+    {
+      "id": "math-linear",
+      "domain": "math",
+      "topic": "solve 2x + 3 = 7 step by step",
+      "expects": "the equation intent compiler, first attempt"
+    },
+    {
+      "id": "math-quadratic",
+      "domain": "math",
+      "topic": "solve the quadratic equation x^2 - 5x + 6 = 0",
+      "expects": "the equation intent compiler, first attempt"
+    },
+    {
+      "id": "math-fraction",
+      "domain": "math",
+      "topic": "solve for x: 3/(x - 1) = 2",
+      "expects": "the equation intent compiler"
+    },
+    {
+      "id": "math-two-variables",
+      "domain": "math",
+      "topic": "solve for y: 4y - 7 = 2y + 9",
+      "expects": "the equation intent compiler"
+    },
+    {
+      "id": "geography-map",
+      "domain": "geography",
+      "topic": "show where the Sahara desert is on a world map",
+      "expects": "full code generation; no intent compiler qualifies yet"
+    },
+    {
+      "id": "geography-route",
+      "domain": "geography",
+      "topic": "the path of the Nile from source to delta",
+      "expects": "full code generation"
+    },
+    {
+      "id": "history-timeline",
+      "domain": "history",
+      "topic": "a timeline of the main events of the Roman Republic",
+      "expects": "full code generation"
+    },
+    {
+      "id": "physics-forces",
+      "domain": "physics",
+      "topic": "the forces acting on a block sliding down a ramp",
+      "expects": "full code generation"
+    },
+    {
+      "id": "biology-cell",
+      "domain": "biology",
+      "topic": "the main parts of a plant cell and what each does",
+      "expects": "full code generation"
+    },
+    {
+      "id": "cs-algorithm",
+      "domain": "computer-science",
+      "topic": "why a binary search halves the list each time",
+      "expects": "full code generation"
+    }
+  ]
+}

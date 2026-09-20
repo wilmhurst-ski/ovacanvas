@@ -1,0 +1,23 @@
+{
+  "name": "@ovacanvas/studio",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The learner-facing MVP: ask a question, watch a verified animated explanation get authored, audited and staged",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ovacanvas/2d": "*",
+    "@ovacanvas/core": "*",
+    "@ovacanvas/host": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "vite": "^4.5.0",
+    "vitest": "^0.34.6"
+  }
+}

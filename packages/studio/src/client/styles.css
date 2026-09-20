@@ -1,0 +1,168 @@
+/* Calm and enlightening, not garish: paper ground, ink text, one accent. */
+:root {
+  --paper: #f7f5f0;
+  --panel: #fffdf9;
+  --ink: #151922;
+  --muted: #6b6f7a;
+  --line: #e2ded4;
+  --accent: #c2532f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family:
+    ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 32px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.masthead h1 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tagline {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.ask {
+  display: flex;
+  gap: 10px;
+}
+
+.ask input {
+  flex: 1;
+  padding: 14px 16px;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+}
+
+.ask input:focus {
+  border-color: var(--accent);
+}
+
+.ask button {
+  padding: 14px 22px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--panel);
+  background: var(--ink);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.ask button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.stage-wrap {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+/* The host appends one container per staged beat; only the active one is
+   visible, and an outgoing beat stays underneath until it is retired. */
+.stage .ovc-lesson-stage,
+.stage .ovc-beat {
+  position: absolute;
+  inset: 0;
+}
+
+.stage canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--muted);
+  min-height: 22px;
+}
+
+.status-bar .meta {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--line);
+  flex: none;
+}
+
+.dot[data-state='working'] {
+  background: var(--accent);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+.dot[data-state='ok'] {
+  background: #3f7d52;
+}
+
+.dot[data-state='warn'] {
+  background: #b8860b;
+}
+
+.dot[data-state='error'] {
+  background: #a8322a;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}

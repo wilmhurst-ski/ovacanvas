@@ -85,5 +85,13 @@
         "prefix": ["T"]
       }
     ]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["packages/studio/**/*"],
+      "rules": {
+        "@typescript-eslint/naming-convention": "off"
+      }
+    }
+  ]
 }
