@@ -24,6 +24,42 @@ export interface CompileFailure {
 
 export type CompileResult = CompileSuccess | CompileFailure;
 
+interface CompilerCacheEntry {
+  options: ts.CompilerOptions;
+  baseHost: ts.CompilerHost;
+  program?: ts.Program;
+  fileCache: Map<string, ts.SourceFile>;
+}
+
+/**
+ * Long-lived compiler program and AST cache keyed by projectRoot.
+ *
+ * @remarks
+ * Tests the specific speed hypothesis from RESEARCH_FINDINGS.md §6:
+ * By keeping a long-lived TypeScript program and AST cache across compile requests,
+ * static declaration files and node_modules are parsed once on cold start,
+ * collapsing subsequent compile times by over 10x.
+ */
+const COMPILER_CACHE = new Map<string, CompilerCacheEntry>();
+
+export function clearCompilerCache(): void {
+  COMPILER_CACHE.clear();
+}
+
+export function getCompilerCacheStats(): {
+  readonly cachedRoots: number;
+  readonly cachedFilesCount: number;
+} {
+  let totalFiles = 0;
+  for (const entry of COMPILER_CACHE.values()) {
+    totalFiles += entry.fileCache.size;
+  }
+  return {
+    cachedRoots: COMPILER_CACHE.size,
+    cachedFilesCount: totalFiles,
+  };
+}
+
 /**
  * Typecheck and transpile one beat's source text as if it were a real file
  * inside `projectRoot`, resolving `@ovacanvas/*` imports against that
@@ -36,91 +72,103 @@ export type CompileResult = CompileSuccess | CompileFailure;
  * wherever a beat's source text first exists (an authoring server, a local
  * eval harness), before ever constructing a `Player` for it.
  *
- * This is the gate that would have caught `new Node()` with no arguments or
- * `Line({start, end, strokeWidth})` before a single frame was rendered - both
- * are already `tsc` errors today, but nothing in the generation path ever
- * ran `tsc` against generated output, so they only ever surfaced as a
- * silent render hang. A diagnostic here replaces an LLM regeneration round
- * trip (seconds) with an in-process check (milliseconds).
- *
  * Emits CommonJS, not ESM: the browser side (`resolveBeatSource` in
  * `@ovacanvas/host`'s main entry) runs the emitted code through a `require`
- * shim that hands back the *same* already-loaded `@ovacanvas/2d`/`core`
- * module instances the host page itself uses, rather than a native
- * `import()` resolving the bare specifiers itself. A beat loaded through its
- * own bare-specifier resolution would get a second copy of the engine, and
- * `instanceof Node` / signal identity checks across that boundary would
- * silently break - the shim is what keeps every beat on the one real engine
- * instance the rest of the host already runs.
+ * shim that hands back the same already-loaded `@ovacanvas/2d`/`core`
+ * module instances the host page itself uses.
  */
 export function compileBeatSource(
   source: string,
   projectRoot: string,
   virtualFileName = '__beat__.ts',
 ): CompileResult {
-  const configPath = ts.findConfigFile(
-    projectRoot,
-    ts.sys.fileExists,
-    'tsconfig.json',
-  );
-  const parsed = configPath
-    ? ts.parseJsonConfigFileContent(
-        ts.readConfigFile(configPath, ts.sys.readFile).config,
-        ts.sys,
-        path.dirname(configPath),
-      )
-    : {options: {} as ts.CompilerOptions, fileNames: [] as string[]};
+  let entry = compilerCache.get(projectRoot);
+  if (!entry) {
+    const configPath = ts.findConfigFile(
+      projectRoot,
+      ts.sys.fileExists,
+      'tsconfig.json',
+    );
+    const parsed = configPath
+      ? ts.parseJsonConfigFileContent(
+          ts.readConfigFile(configPath, ts.sys.readFile).config,
+          ts.sys,
+          path.dirname(configPath),
+        )
+      : {options: {} as ts.CompilerOptions, fileNames: [] as string[]};
 
-  const options: ts.CompilerOptions = {
-    ...parsed.options,
-    noEmit: false,
-    declaration: false,
-    declarationMap: false,
-    sourceMap: false,
-    inlineSourceMap: false,
-    module: ts.ModuleKind.CommonJS,
-    target: ts.ScriptTarget.ES2020,
-    moduleResolution: ts.ModuleResolutionKind.NodeJs,
-    skipLibCheck: true,
-    isolatedModules: true,
-    noEmitOnError: false,
-  };
+    const options: ts.CompilerOptions = {
+      ...parsed.options,
+      noEmit: false,
+      declaration: false,
+      declarationMap: false,
+      sourceMap: false,
+      inlineSourceMap: false,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+      moduleResolution: ts.ModuleResolutionKind.NodeJs,
+      skipLibCheck: true,
+      isolatedModules: true,
+      noEmitOnError: false,
+    };
+
+    const baseHost = ts.createCompilerHost(options, true);
+    entry = {options, baseHost, fileCache: new Map()};
+    COMPILER_CACHE.set(projectRoot, entry);
+  }
 
   const virtualPath = path.resolve(projectRoot, virtualFileName);
   const virtualSourceFile = ts.createSourceFile(
     virtualPath,
     source,
-    options.target ?? ts.ScriptTarget.ES2020,
+    entry.options.target ?? ts.ScriptTarget.ES2020,
     true,
     ts.ScriptKind.TS,
   );
 
-  const baseHost = ts.createCompilerHost(options, true);
   const host: ts.CompilerHost = {
-    ...baseHost,
+    ...entry.baseHost,
     getSourceFile: (
       fileName,
       languageVersion,
       onError,
       shouldCreateNewSourceFile,
-    ) =>
-      path.resolve(fileName) === virtualPath
-        ? virtualSourceFile
-        : baseHost.getSourceFile(
-            fileName,
-            languageVersion,
-            onError,
-            shouldCreateNewSourceFile,
-          ),
+    ) => {
+      const resolved = path.resolve(fileName);
+      if (resolved === virtualPath) {
+        return virtualSourceFile;
+      }
+      if (entry.fileCache.has(resolved)) {
+        return entry.fileCache.get(resolved)!;
+      }
+      const sf = entry.baseHost.getSourceFile(
+        fileName,
+        languageVersion,
+        onError,
+        shouldCreateNewSourceFile,
+      );
+      if (sf) {
+        entry.fileCache.set(resolved, sf);
+      }
+      return sf;
+    },
     fileExists: fileName =>
-      path.resolve(fileName) === virtualPath || baseHost.fileExists(fileName),
+      path.resolve(fileName) === virtualPath ||
+      entry.baseHost.fileExists(fileName),
     readFile: fileName =>
       path.resolve(fileName) === virtualPath
         ? source
-        : baseHost.readFile(fileName),
+        : entry.baseHost.readFile(fileName),
   };
 
-  const program = ts.createProgram([virtualPath], options, host);
+  const program = ts.createProgram(
+    [virtualPath],
+    entry.options,
+    host,
+    entry.program,
+  );
+  entry.program = program;
+
   const diagnostics = [
     ...program.getSyntacticDiagnostics(virtualSourceFile),
     ...program.getSemanticDiagnostics(virtualSourceFile),
