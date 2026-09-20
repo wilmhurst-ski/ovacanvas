@@ -153,6 +153,8 @@ describe('OvaCanvas contract composition and verification evidence', () => {
       window.ovcContractEvidence.reevaluate('a'),
     );
     const current = await snapshot('a');
+    expect(next).not.toBeNull();
+    if (!next) throw new Error('Expected next certification to be present');
     expect(next.result).toBe('PASS');
     expect(next.generation).toBe(previous.generation);
     expect(next.runtimeRevision).toBe(previous.runtimeRevision + 1);

@@ -63,13 +63,13 @@ function twoLabelBeat(
       text: 'Alpha',
       fontSize: 64,
       fill: INK,
-      position: positions[0],
+      position: [positions[0][0], positions[0][1]],
     });
     beta = new Txt({
       text: 'Beta',
       fontSize: 64,
       fill: INK,
-      position: positions[1],
+      position: [positions[1][0], positions[1][1]],
     });
     view.add([alpha, beta]);
     yield* waitFor(1);
@@ -395,8 +395,9 @@ export class LessonPipelineHarness {
       const afterPositions = positions();
       if (repair.attempted) {
         const rerendered = await presentation.renderOnce();
-        if (!rerendered)
-          {return {rendered, before, repair, note: 'rerender failed'};}
+        if (!rerendered) {
+          return {rendered, before, repair, note: 'rerender failed'};
+        }
       }
       const after = evaluateVisualAudit({
         items,

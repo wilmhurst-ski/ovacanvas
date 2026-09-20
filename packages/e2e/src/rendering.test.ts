@@ -45,5 +45,7 @@ async function readOutputFiles() {
     }),
   );
 
-  return images.filter(image => image !== null);
+  return images.filter(
+    (image): image is {name: string; content: Buffer} => image !== null,
+  );
 }

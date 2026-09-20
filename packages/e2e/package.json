@@ -11,7 +11,8 @@
     "test:learner": "vitest run src/learner.test.ts",
     "test:transition": "vitest run src/transition.test.ts",
     "test:composition": "vitest run src/composition.test.ts",
-    "test:runtime-built": "vitest run src/runtimeBuilt.test.ts"
+    "test:runtime-built": "vitest run src/runtimeBuilt.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ovacanvas/2d": "*",
