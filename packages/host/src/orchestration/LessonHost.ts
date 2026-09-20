@@ -1,8 +1,10 @@
 import {TransitionOwner} from '@ovacanvas/core/lib/internal';
 import type {ChunkRequest} from '../lesson/ChunkRequest';
+import {Lesson} from '../lesson/Lesson';
 import type {LessonState} from '../lesson/LessonState';
 import {LessonStore} from '../lesson/LessonStore';
 import {BeatAdapter} from '../presentation/BeatAdapter';
+import type {BeatManifest} from '../presentation/BeatManifest';
 import type {BeatPresentation} from '../presentation/BeatPresentation';
 import {createOpenerBeat} from '../presentation/openerBeat';
 import type {BeatStagingResult} from './BeatStagingCoordinator';
@@ -111,6 +113,16 @@ export class LessonHost {
     const result = await this.stage({beat: opener});
     if (result.ok) this.activate();
     return result;
+  }
+
+  public createLesson(
+    beats: readonly BeatManifest[],
+  ): Lesson<BeatPresentation> {
+    return new Lesson<BeatPresentation>({
+      store: this.store,
+      coordinator: this.coordinator,
+      beats,
+    });
   }
 
   public dispose(): void {

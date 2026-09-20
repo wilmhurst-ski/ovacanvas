@@ -396,6 +396,75 @@ describe('lesson pipeline readiness gate', () => {
     expect(hasInk).toBe(true);
   });
 
+  test('a real 3-beat lesson demonstrably cooks beat 2 while beat 1 is on screen during active playback', async () => {
+    // Start a 3-beat lesson: beat 0 activates, beat 1 begins cooking offstage
+    const started = await app.page.evaluate(() =>
+      (window as any).ovcLesson.startLesson(['fixed', 'fixed', 'fixed']),
+    );
+    expect(started.result.ok).toBe(true);
+
+    let state = (await snapshot()) as any;
+    expect(state.lessonStatus.activeIndex).toBe(0);
+    expect(state.current.beatId).toBe('fixed-0');
+    expect(state.current.visible).toBe(true);
+
+    // Wait until beat 1 candidate is ready offstage
+    await app.page.waitForFunction(
+      () => {
+        const s = (window as any).ovcLesson.snapshot();
+        return s.candidateReady === true && s.lessonStatus?.cookingIndex === 1;
+      },
+      undefined,
+      {timeout: 10000, polling: 100},
+    );
+
+    // Advance to beat 1: beat 1 activates and begins playback!
+    const advance1 = await app.page.evaluate(() =>
+      (window as any).ovcLesson.advanceLesson(),
+    );
+    expect(advance1.result.ok).toBe(true);
+
+    // Give the playback loop a moment to advance frames
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Assert: during active playback of beat 1, beat 2 is cooking offstage!
+    const playback = (await app.page.evaluate(() =>
+      (window as any).ovcLesson.playbackState(),
+    )) as {isPlaying: boolean; frame: number; renderCount: number};
+    expect(playback.isPlaying).toBe(true);
+
+    state = (await snapshot()) as any;
+    expect(state.current.beatId).toBe('fixed-1');
+    expect(state.current.visible).toBe(true);
+    expect(state.lessonStatus.activeIndex).toBe(1);
+
+    // The key mandate: candidate generation is populated while beat 1 is on screen
+    expect(state.candidateGeneration).not.toBeNull();
+    expect(state.lessonStatus.cookingIndex).toBe(2);
+    expect(state.lessonStatus.cookingBeatId).toBe('fixed-2');
+
+    // Wait for beat 2 to become ready offstage
+    await app.page.waitForFunction(
+      () => {
+        const s = (window as any).ovcLesson.snapshot();
+        return s.candidateReady === true && s.lessonStatus?.cookingIndex === 2;
+      },
+      undefined,
+      {timeout: 10000, polling: 100},
+    );
+
+    // Advance to beat 2
+    const advance2 = await app.page.evaluate(() =>
+      (window as any).ovcLesson.advanceLesson(),
+    );
+    expect(advance2.result.ok).toBe(true);
+
+    state = (await snapshot()) as any;
+    expect(state.current.beatId).toBe('fixed-2');
+    expect(state.lessonStatus.activeIndex).toBe(2);
+    expect(state.candidateGeneration).toBeNull();
+  });
+
   test('no page errors were raised across the whole suite', () => {
     expect(app.pageErrors).toEqual([]);
   });

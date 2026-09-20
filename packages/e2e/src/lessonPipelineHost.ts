@@ -3,6 +3,7 @@ import {Rect, Txt, evaluateVisualAudit, makeScene2D} from '@ovacanvas/2d';
 import {BBox, waitFor} from '@ovacanvas/core';
 import {
   BeatPresentation,
+  Lesson,
   LessonHost,
   attemptMechanicalRepair,
   createFallbackBeat,
@@ -270,6 +271,7 @@ function summarize(presentation: BeatPresentation | null) {
 export class LessonPipelineHarness {
   public readonly container: HTMLDivElement;
   public host: LessonHost | null = null;
+  public lesson: Lesson<BeatPresentation> | null = null;
 
   public constructor() {
     // Reuse the page's own container rather than creating a second element
@@ -286,11 +288,40 @@ export class LessonPipelineHarness {
   }
 
   public boot(question: string): Promise<unknown> {
+    this.lesson?.dispose();
+    this.lesson = null;
     this.host?.dispose();
     this.host = new LessonHost('lesson', question, this.container);
     return this.host
       .start()
       .then(result => ({result, snapshot: this.snapshot()}));
+  }
+
+  public async startLesson(kinds: BeatKind[]): Promise<unknown> {
+    this.lesson?.dispose();
+    this.host?.dispose();
+    this.host = new LessonHost('lesson', 'Multi-beat Lesson', this.container);
+    const beats = kinds.map((k, i) => {
+      const b = buildBeat(k);
+      return {...b, id: `${b.id}-${i}`};
+    });
+    this.lesson = this.host.createLesson(beats);
+    const result = await this.lesson.start();
+    return {
+      result,
+      snapshot: this.snapshot(),
+      lessonStatus: this.lesson.status(),
+    };
+  }
+
+  public async advanceLesson(): Promise<unknown> {
+    if (!this.lesson) throw new Error('startLesson() has not been called');
+    const result = await this.lesson.advance();
+    return {
+      result,
+      snapshot: this.snapshot(),
+      lessonStatus: this.lesson.status(),
+    };
   }
 
   public async stage(kind: BeatKind): Promise<unknown> {
@@ -681,6 +712,7 @@ export class LessonPipelineHarness {
       slotChildren: host.stageSlot.children.length,
       current: summarize(host.current),
       outgoing: summarize(host.outgoing),
+      lessonStatus: this.lesson?.status() ?? null,
     };
   }
 

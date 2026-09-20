@@ -1,4 +1,6 @@
 export type {ChunkRequest} from './lesson/ChunkRequest';
+export {Lesson} from './lesson/Lesson';
+export type {LessonAdvanceResult, LessonOptions} from './lesson/Lesson';
 export {initialLessonState} from './lesson/LessonState';
 export type {BeatRecord, LessonState} from './lesson/LessonState';
 export {LessonStore} from './lesson/LessonStore';
