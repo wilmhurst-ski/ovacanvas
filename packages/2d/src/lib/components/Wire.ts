@@ -57,7 +57,10 @@ export class Wire extends Line {
   public declare readonly to: SimpleSignal<WireEndpoint, this>;
 
   public constructor(props: WireProps) {
-    super(props);
+    super({
+      points: () => [],
+      ...props,
+    });
     this.points(() => [
       this.resolveEndpoint(this.from()),
       this.resolveEndpoint(this.to()),
