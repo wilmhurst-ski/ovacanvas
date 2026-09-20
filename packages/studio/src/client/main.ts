@@ -109,8 +109,9 @@ async function reviewFrame(
     findings?: AuditFinding[];
     detail?: string;
   };
-  if (!payload.ok)
-    {throw new Error(payload.detail ?? 'the vision review failed');}
+  if (!payload.ok) {
+    throw new Error(payload.detail ?? 'the vision review failed');
+  }
   return payload.findings ?? [];
 }
 
@@ -129,6 +130,7 @@ interface GenerateOutcome {
   source?: string;
   code?: string;
   attempts?: number;
+  deterministic?: boolean;
   repaired?: boolean;
   provider?: string;
   model?: string;

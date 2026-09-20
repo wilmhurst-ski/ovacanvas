@@ -522,7 +522,7 @@ export async function runCorpus(options: RunCorpusOptions): Promise<CorpusRun> {
       ok: outcome.ok,
       attempts: outcome.ok ? outcome.attempts : 0,
       firstAttempt: outcome.ok && outcome.attempts === 1,
-      ...(outcome.deterministic ? {deterministic: true} : {}),
+      ...(outcome.ok && outcome.deterministic ? {deterministic: true} : {}),
       repaired: outcome.ok ? outcome.repaired : false,
       strategy: outcome.strategy,
       provider: outcome.provider,

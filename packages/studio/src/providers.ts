@@ -476,7 +476,8 @@ export async function complete(
     options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
     options.fetchImpl,
   );
-  return sent.ok ? toResult(sent.payload, spec) : sent;
+  if (!sent.ok) return sent;
+  return toResult(sent.payload, spec);
 }
 
 export interface CompleteVisionOptions extends CompleteOptions {
@@ -517,7 +518,8 @@ export async function completeVision(
     options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
     options.fetchImpl,
   );
-  return sent.ok ? toResult(sent.payload, spec) : sent;
+  if (!sent.ok) return sent;
+  return toResult(sent.payload, spec);
 }
 
 /** Strip a markdown fence a model wrapped its module in. */

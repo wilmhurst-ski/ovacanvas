@@ -28,6 +28,7 @@
     "sync": "node tools/sync-workspace-packages.mjs",
     "studio:dev": "npm run dev -w packages/studio",
     "studio:test": "npm run test -w packages/studio",
+    "studio:typecheck": "npm run typecheck -w packages/studio",
     "corpus": "node tools/run-corpus.mjs",
     "verify:live": "node tools/verify-live.mjs",
     "check:provider": "node tools/check-provider.mjs",
