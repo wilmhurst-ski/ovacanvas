@@ -36,7 +36,14 @@ export async function startFoundation(
   const consoleErrors: string[] = [];
   browserPage.on('pageerror', error => pageErrors.push(String(error)));
   browserPage.on('console', message => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() !== 'error') return;
+    // The source URL is appended because a failed resource load reports only
+    // "Failed to load resource: the server responded with a status of 404" -
+    // with no URL, that is indistinguishable between a missing favicon and a
+    // missing asset, and a guard that cannot tell them apart has to either
+    // ignore both or fail on both.
+    const {url} = message.location();
+    consoleErrors.push(url ? `${message.text()} @ ${url}` : message.text());
   });
 
   await browserPage.goto(

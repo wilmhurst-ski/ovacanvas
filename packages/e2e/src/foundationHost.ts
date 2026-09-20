@@ -95,11 +95,6 @@ function hashCanvas(stage: Stage, size: number) {
 const SIZE = 320;
 
 /**
- * The smallest runtime host that can exercise the frozen foundation
- * invariants. It owns the Store, the Stage and the Player; the Player and
- * Scene own no semantic truth.
- */
-/**
  * A commit outcome flattened for fixture use.
  *
  * @remarks
@@ -131,6 +126,11 @@ export interface HostOptions {
   autoActivate?: boolean;
 }
 
+/**
+ * The smallest runtime host that can exercise the frozen foundation
+ * invariants. It owns the Store, the Stage and the Player; the Player and
+ * Scene own no semantic truth.
+ */
 export class FoundationHost {
   public readonly store: RuntimeStore;
   public readonly stage = new Stage();
