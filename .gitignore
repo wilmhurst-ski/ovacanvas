@@ -6,6 +6,7 @@ node_modules
 /packages/*/static
 /packages/*/build
 /packages/*/output
+/packages/*/evidence
 
 .idea
 .nx/cache
