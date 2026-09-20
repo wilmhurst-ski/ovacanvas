@@ -26,9 +26,9 @@
     "lib"
   ],
   "dependencies": {
-    "@ovacanvas/2d": "^3.17.2",
-    "@ovacanvas/core": "^3.17.2",
-    "typescript": "^5.0.0"
+    "@ovacanvas/2d": "*",
+    "@ovacanvas/core": "*",
+    "typescript": "^5.2.2"
   },
   "devDependencies": {
     "jsdom": "^22.1.0",
