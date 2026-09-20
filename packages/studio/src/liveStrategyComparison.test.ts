@@ -141,16 +141,14 @@ describe.skipIf(!LIVE)('strategy comparison on equation solving', () => {
     const intent = summarise(equationIntent.id);
     const code = summarise(fullCodeGen.id);
 
-    if (intent.measured < 3 || code.measured < 3) {
-      // Not enough provider answers to compare anything. Failing here would
-      // report an outage as a strategy result, which is the one thing this
-      // test exists not to do.
-      console.warn(
-        `MEASUREMENT INCOMPLETE: only ${intent.measured} intent and ${code.measured} code runs ` +
-          'got a provider answer. Re-run when the quota has reset.',
-      );
-      return;
-    }
+    expect(
+      intent.measured,
+      `MEASUREMENT INCOMPLETE: only ${intent.measured} intent runs got a provider answer.`,
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      code.measured,
+      `MEASUREMENT INCOMPLETE: only ${code.measured} code runs got a provider answer.`,
+    ).toBeGreaterThanOrEqual(3);
 
     // The deterministic template's whole reason to exist: the model is never
     // asked a question it could get geometrically wrong, so it should not need

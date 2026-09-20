@@ -129,13 +129,11 @@ describe.skipIf(!LIVE)('non-STEM domain breadth', () => {
     // not a measurement, so the assertion needs a quorum; failing here on a
     // quota wall would report an exhausted free tier as a verdict on non-STEM
     // support.
-    if (answered.length < 3) {
-      console.warn(
-        `DOMAIN BREADTH: only ${answered.length} of ${TOPICS.length} runs got a provider answer. ` +
-          'Re-run when quota allows - not enough to assert a rate.',
-      );
-      return;
-    }
+    expect(
+      answered.length,
+      `DOMAIN BREADTH: only ${answered.length} of ${TOPICS.length} runs got a provider answer. ` +
+        'Quorum not reached to assert domain breadth.',
+    ).toBeGreaterThanOrEqual(3);
     // The general path is the floor for every domain without a purpose-built
     // primitive, so it has to work at all - a zero here would mean the
     // fallback is broken, not that these domains need intent compilers.
