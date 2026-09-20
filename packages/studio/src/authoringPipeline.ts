@@ -245,10 +245,12 @@ function hintFor(diagnostics: readonly CompileDiagnostic[]): string {
  */
 export function missingBeatExports(code: string): string[] {
   const missing: string[] = [];
-  if (!/exports\.default\s*=/.test(code))
-    {missing.push('a default export (the scene generator)');}
-  if (!/exports\.buildAuditSpec\s*=/.test(code))
-    {missing.push('a named buildAuditSpec export');}
+  if (!/exports\.default\s*=/.test(code)) {
+    missing.push('a default export (the scene generator)');
+  }
+  if (!/exports\.buildAuditSpec\s*=/.test(code)) {
+    missing.push('a named buildAuditSpec export');
+  }
   return missing;
 }
 
@@ -426,6 +428,7 @@ export async function authorWithRetry(
           strategy: strategyId,
           provider: spec.id,
           model,
+          usage,
           log,
         };
       }
@@ -441,6 +444,7 @@ export async function authorWithRetry(
           strategy: strategyId,
           provider: spec.id,
           model,
+          usage,
           log,
         };
       }
