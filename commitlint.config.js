@@ -5,7 +5,18 @@ module.exports = {
     'scope-enum': [
       2,
       'always',
-      ['2d', 'core', 'e2e', 'legacy', 'player', 'ui', 'vite-plugin'],
+      [
+        '2d',
+        'core',
+        'e2e',
+        'host',
+        'legacy',
+        'player',
+        'studio',
+        'template',
+        'ui',
+        'vite-plugin',
+      ],
     ],
   },
 };
