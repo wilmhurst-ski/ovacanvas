@@ -10,11 +10,11 @@ describe('Rendering', () => {
 
   beforeAll(async () => {
     app = await start();
-  });
+  }, 120000);
 
   afterAll(async () => {
-    await app.stop();
-  });
+    await app?.stop();
+  }, 60000);
 
   test('Animation renders correctly', async () => {
     await app.page.click('#render');
