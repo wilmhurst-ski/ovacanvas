@@ -10,3 +10,22 @@ node_modules
 .idea
 .nx/cache
 .nx/workspace-data
+
+# Provider credentials. Every key this project needs lives in one of these
+# files and nowhere else - never in source, never in a command, never echoed.
+.env
+.env.local
+.env.*.local
+
+# Corpus run results: run artifacts, not software. Kept locally so a run has a
+# baseline to compare against; a CI suite should persist them as build
+# artifacts instead of committing them.
+/packages/studio/corpus-results
+
+# Vite/Vitest timestamp debris
+*.timestamp-*.mjs
+
+# Generic secret-shaped filenames
+*.key
+*credential*
+*secret*
