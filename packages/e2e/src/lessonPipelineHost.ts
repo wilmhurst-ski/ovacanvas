@@ -297,10 +297,18 @@ export class LessonPipelineHarness {
       .then(result => ({result, snapshot: this.snapshot()}));
   }
 
-  public async startLesson(kinds: BeatKind[]): Promise<unknown> {
+  public async startLesson(
+    kinds: BeatKind[],
+    options?: {transitionDurationMs?: number},
+  ): Promise<unknown> {
     this.lesson?.dispose();
     this.host?.dispose();
-    this.host = new LessonHost('lesson', 'Multi-beat Lesson', this.container);
+    this.host = new LessonHost(
+      'lesson',
+      'Multi-beat Lesson',
+      this.container,
+      options,
+    );
     const beats = kinds.map((k, i) => {
       const b = buildBeat(k);
       return {...b, id: `${b.id}-${i}`};
@@ -321,6 +329,56 @@ export class LessonPipelineHarness {
       result,
       snapshot: this.snapshot(),
       lessonStatus: this.lesson.status(),
+    };
+  }
+
+  public async exploreLesson(
+    kind: BeatKind,
+    question?: string,
+  ): Promise<unknown> {
+    if (!this.lesson) throw new Error('startLesson() has not been called');
+    const beat = buildBeat(kind);
+    const explorationBeat = {...beat, id: `exploration-${beat.id}`};
+    const result = await this.lesson.explore(explorationBeat, {question});
+    return {
+      result,
+      snapshot: this.snapshot(),
+      lessonStatus: this.lesson.status(),
+    };
+  }
+
+  public async abandonExploration(): Promise<unknown> {
+    if (!this.lesson) throw new Error('startLesson() has not been called');
+    const result = await this.lesson.abandonExploration();
+    return {
+      result,
+      snapshot: this.snapshot(),
+      lessonStatus: this.lesson.status(),
+    };
+  }
+
+  public async commitExploration(question?: string): Promise<unknown> {
+    if (!this.lesson) throw new Error('startLesson() has not been called');
+    const result = await this.lesson.commitExploration({question});
+    return {
+      result,
+      snapshot: this.snapshot(),
+      lessonStatus: this.lesson.status(),
+    };
+  }
+
+  public getTransitionOpacities(): {
+    current: {beatId: string; opacity: number} | null;
+    outgoing: {beatId: string; opacity: number} | null;
+  } {
+    const host = this.requireHost();
+    return {
+      current: host.current
+        ? {beatId: host.current.manifest.id, opacity: host.current.opacity}
+        : null,
+      outgoing: host.outgoing
+        ? {beatId: host.outgoing.manifest.id, opacity: host.outgoing.opacity}
+        : null,
     };
   }
 

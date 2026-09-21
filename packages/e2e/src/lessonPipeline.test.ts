@@ -465,6 +465,219 @@ describe('lesson pipeline readiness gate', () => {
     expect(state.candidateGeneration).toBeNull();
   });
 
+  test('an exploratory follow-up question can be asked and abandoned without disturbing committed state', async () => {
+    // Start lesson with 2 beats
+    const started = await app.page.evaluate(() =>
+      (window as any).ovcLesson.startLesson(['fixed', 'fixed']),
+    );
+    expect(started.result.ok).toBe(true);
+
+    let state = (await snapshot()) as any;
+    expect(state.lessonStatus.activeIndex).toBe(0);
+    expect(state.current.beatId).toBe('fixed-0');
+    expect(state.lessonStatus.isExploring).toBe(false);
+
+    // Ask a tangential follow-up question
+    const explored = await app.page.evaluate(() =>
+      (window as any).ovcLesson.exploreLesson(
+        'advisory',
+        'Tangential exploration query',
+      ),
+    );
+    expect(explored.result.ok).toBe(true);
+
+    state = (await snapshot()) as any;
+    expect(state.lessonStatus.isExploring).toBe(true);
+    expect(state.current.beatId).toBe('exploration-advisory');
+    expect(state.lessonStatus.committedIndex).toBe(0);
+    expect(state.lessonStatus.totalBeats).toBe(2);
+
+    // Abandon exploration and return to committed track
+    const abandoned = await app.page.evaluate(() =>
+      (window as any).ovcLesson.abandonExploration(),
+    );
+    expect(abandoned.result.ok).toBe(true);
+
+    state = (await snapshot()) as any;
+    expect(state.lessonStatus.isExploring).toBe(false);
+    expect(state.current.beatId).toBe('fixed-0');
+    expect(state.lessonStatus.committedIndex).toBe(0);
+
+    // Wait until candidate beat 1 is ready offstage
+    await app.page.waitForFunction(
+      () => {
+        const s = (window as any).ovcLesson.snapshot();
+        return s.candidateReady === true && s.lessonStatus?.cookingIndex === 1;
+      },
+      undefined,
+      {timeout: 10000, polling: 100},
+    );
+
+    // Advance seamlessly along the committed track
+    const advanced = await app.page.evaluate(() =>
+      (window as any).ovcLesson.advanceLesson(),
+    );
+    expect(advanced.result.ok).toBe(true);
+
+    state = (await snapshot()) as any;
+    expect(state.current.beatId).toBe('fixed-1');
+    expect(state.lessonStatus.activeIndex).toBe(1);
+  });
+
+  test('committing an exploration incorporates it into the lesson sequence and advances authoritative state', async () => {
+    // Start lesson with 2 beats
+    const started = await app.page.evaluate(() =>
+      (window as any).ovcLesson.startLesson(['fixed', 'fixed']),
+    );
+    expect(started.result.ok).toBe(true);
+
+    // Ask exploration question
+    const explored = await app.page.evaluate(() =>
+      (window as any).ovcLesson.exploreLesson(
+        'advisory',
+        'Exploring deeper nuances',
+      ),
+    );
+    expect(explored.result.ok).toBe(true);
+
+    // Learner commits the explanation
+    const committed = await app.page.evaluate(() =>
+      (window as any).ovcLesson.commitExploration('Accepted explanation'),
+    );
+    expect(committed.result.ok).toBe(true);
+
+    let state = (await snapshot()) as any;
+    expect(state.lessonStatus.isExploring).toBe(false);
+    expect(state.current.beatId).toBe('exploration-advisory');
+    expect(state.lessonStatus.committedIndex).toBe(1);
+    expect(state.lessonStatus.totalBeats).toBe(3); // Sequence expanded!
+
+    // Wait for subsequent beat (now index 2) to become ready offstage
+    await app.page.waitForFunction(
+      () => {
+        const s = (window as any).ovcLesson.snapshot();
+        return s.candidateReady === true && s.lessonStatus?.cookingIndex === 2;
+      },
+      undefined,
+      {timeout: 10000, polling: 100},
+    );
+
+    // Advancing goes to fixed-1 at index 2
+    const advanced = await app.page.evaluate(() =>
+      (window as any).ovcLesson.advanceLesson(),
+    );
+    expect(advanced.result.ok).toBe(true);
+
+    state = (await snapshot()) as any;
+    expect(state.current.beatId).toBe('fixed-1');
+    expect(state.lessonStatus.activeIndex).toBe(2);
+  });
+
+  test('crossfade visual transition animates opacities between outgoing and incoming beats and retires cleanly', async () => {
+    // Start lesson with 400ms transition duration
+    const started = await app.page.evaluate(() =>
+      (window as any).ovcLesson.startLesson(['fixed', 'fixed'], {
+        transitionDurationMs: 400,
+      }),
+    );
+    expect(started.result.ok).toBe(true);
+
+    // Wait until candidate beat 1 is ready
+    await app.page.waitForFunction(
+      () => {
+        const s = (window as any).ovcLesson.snapshot();
+        return s.candidateReady === true && s.lessonStatus?.cookingIndex === 1;
+      },
+      undefined,
+      {timeout: 10000, polling: 100},
+    );
+
+    // Trigger advance
+    const advancePromise = app.page.evaluate(() =>
+      (window as any).ovcLesson.advanceLesson(),
+    );
+
+    // Wait ~150ms to sample mid-transition state
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    const midOpacities = (await app.page.evaluate(() =>
+      (window as any).ovcLesson.getTransitionOpacities(),
+    )) as {
+      current: {beatId: string; opacity: number} | null;
+      outgoing: {beatId: string; opacity: number} | null;
+    };
+
+    expect(midOpacities.current).not.toBeNull();
+    expect(midOpacities.outgoing).not.toBeNull();
+
+    // In mid-flight crossfade, incoming is fading in (> 0) and outgoing is fading out (< 1)
+    expect(midOpacities.current!.opacity).toBeGreaterThan(0);
+    expect(midOpacities.outgoing!.opacity).toBeLessThan(1);
+
+    await advancePromise;
+
+    // Wait for transition to complete and outgoing to be retired
+    await app.page.waitForFunction(
+      () => {
+        const s = (window as any).ovcLesson.snapshot();
+        return s.outgoing === null && s.current?.opacity === 1;
+      },
+      undefined,
+      {timeout: 5000, polling: 50},
+    );
+
+    const finalState = (await snapshot()) as any;
+    expect(finalState.outgoing).toBeNull();
+    expect(finalState.current.opacity).toBe(1);
+    expect(finalState.current.beatId).toBe('fixed-1');
+  });
+
+  test('mid-flight interruption during transition cancels gracefully without ghosting', async () => {
+    // Start lesson with 800ms transition duration
+    const started = await app.page.evaluate(() =>
+      (window as any).ovcLesson.startLesson(['fixed', 'fixed', 'fixed'], {
+        transitionDurationMs: 800,
+      }),
+    );
+    expect(started.result.ok).toBe(true);
+
+    // Wait until candidate 1 is ready
+    await app.page.waitForFunction(
+      () => (window as any).ovcLesson.snapshot().candidateReady === true,
+      undefined,
+      {timeout: 10000, polling: 100},
+    );
+
+    // Advance to beat 1
+    app.page.evaluate(() => (window as any).ovcLesson.advanceLesson());
+
+    // Wait 100ms into the transition
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Mid-flight interruption: learner asks an exploration question!
+    const interruptResult = await app.page.evaluate(() =>
+      (window as any).ovcLesson.exploreLesson('fixed', 'Interrupting question'),
+    );
+    expect(interruptResult.result.ok).toBe(true);
+
+    // Wait for everything to settle
+    await app.page.waitForFunction(
+      () => {
+        const s = (window as any).ovcLesson.snapshot();
+        return s.outgoing === null && s.current?.opacity === 1;
+      },
+      undefined,
+      {timeout: 5000, polling: 50},
+    );
+
+    const state = (await snapshot()) as any;
+    expect(state.outgoing).toBeNull();
+    expect(state.current.beatId).toBe('exploration-fixed');
+    expect(state.current.opacity).toBe(1);
+    // Crucial: no ghost canvases left behind in the DOM slot
+    expect(state.canvasesInSlot).toBe(1);
+  });
+
   test('no page errors were raised across the whole suite', () => {
     expect(app.pageErrors).toEqual([]);
   });
