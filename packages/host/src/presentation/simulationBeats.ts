@@ -159,7 +159,7 @@ export function createKeplerianOrbitBeat(
 
     sunNode = new Circle({
       size: 80,
-      fill: '#f59e0b',
+      fill: currentTheme.yellow,
       position: [0, 0],
     });
 

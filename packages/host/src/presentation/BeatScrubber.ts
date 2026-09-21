@@ -1,3 +1,4 @@
+import {theme} from '@ovacanvas/2d/lib/theme/theme';
 import type {BeatPresentation} from './BeatPresentation';
 
 export interface BeatScrubberOptions {
@@ -49,6 +50,8 @@ export class BeatScrubber {
     container: HTMLElement,
     options: BeatScrubberOptions = {},
   ) {
+    const currentTheme = theme();
+
     this.element = document.createElement('div');
     this.element.className = options.className
       ? `ovc-scrubber ${options.className}`
@@ -71,7 +74,7 @@ export class BeatScrubber {
       position: 'relative',
       flex: '1',
       height: '8px',
-      backgroundColor: 'rgba(128, 128, 128, 0.25)',
+      backgroundColor: currentTheme.hairline,
       borderRadius: '4px',
       cursor: 'pointer',
       touchAction: 'none',
@@ -86,7 +89,7 @@ export class BeatScrubber {
       left: '0',
       height: '100%',
       width: '0%',
-      backgroundColor: '#2563eb',
+      backgroundColor: currentTheme.blue,
       borderRadius: '4px',
       pointerEvents: 'none',
     });
@@ -106,8 +109,8 @@ export class BeatScrubber {
       left: '0%',
       width: '18px',
       height: '18px',
-      backgroundColor: '#ffffff',
-      border: '2px solid #2563eb',
+      backgroundColor: currentTheme.clearField,
+      border: `2px solid ${currentTheme.blue}`,
       borderRadius: '50%',
       transform: 'translate(-50%, -50%)',
       cursor: 'grab',
@@ -125,7 +128,7 @@ export class BeatScrubber {
       this.applyBaseStyles(this.timeElement, {
         fontFamily: 'system-ui, -apple-system, sans-serif',
         fontSize: '12px',
-        color: '#64748b',
+        color: currentTheme.secondaryInk,
         minWidth: '70px',
         textAlign: 'right',
       });
