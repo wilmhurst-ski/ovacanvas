@@ -1,8 +1,8 @@
 import {Txt, makeScene2D, type AuditItem} from '@ovacanvas/2d';
+import {theme} from '@ovacanvas/2d/lib/theme/theme';
 import {BBox, waitFor} from '@ovacanvas/core';
 import type {BeatAuditSpec, BeatManifest} from './BeatManifest';
 
-const INK = '#151922';
 const SAFE_AREA = new BBox(60, 60, 1800, 960);
 const OPENER_HOLD_SECONDS = 1.2;
 
@@ -32,12 +32,13 @@ export function createOpenerBeat(question: string): BeatManifest {
   let questionNode: Txt;
 
   const runner = makeScene2D(function* (view) {
+    const currentTheme = theme();
     const size = view.size();
     questionNode = new Txt({
       text: question,
       fontSize: 56,
       fontWeight: 600,
-      fill: INK,
+      fill: currentTheme.ink,
       textAlign: 'center',
       textWrap: true,
       width: size.width * 0.7,

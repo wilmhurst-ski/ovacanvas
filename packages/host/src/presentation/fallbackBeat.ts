@@ -1,9 +1,8 @@
 import {Txt, makeScene2D, type AuditItem} from '@ovacanvas/2d';
+import {theme} from '@ovacanvas/2d/lib/theme/theme';
 import {BBox, waitFor} from '@ovacanvas/core';
 import type {BeatAuditSpec, BeatManifest} from './BeatManifest';
 
-const INK = '#151922';
-const MUTED = '#6b6f7a';
 const SAFE_AREA = new BBox(60, 60, 1800, 960);
 const HOLD_SECONDS = 1.4;
 
@@ -33,11 +32,12 @@ export function createFallbackBeat(question: string): BeatManifest {
   let restated: Txt;
 
   const runner = makeScene2D(function* (view) {
+    const currentTheme = theme();
     heading = new Txt({
       text: "I couldn't build a visual for this one",
       fontSize: 46,
       fontWeight: 700,
-      fill: INK,
+      fill: currentTheme.ink,
       textAlign: 'center',
       textWrap: true,
       width: view.size().width * 0.7,
@@ -46,7 +46,7 @@ export function createFallbackBeat(question: string): BeatManifest {
     restated = new Txt({
       text: question,
       fontSize: 30,
-      fill: MUTED,
+      fill: currentTheme.secondaryInk,
       textAlign: 'center',
       textWrap: true,
       width: view.size().width * 0.6,
