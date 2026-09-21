@@ -61,6 +61,26 @@ export class LessonStore {
     });
   }
 
+  /**
+   * Commit an accepted exploration into the authoritative lesson projection.
+   *
+   * @remarks
+   * Mutates the projection by appending the accepted exploration beat and optionally
+   * updating the question, advancing the RuntimeAuthority revision.
+   */
+  public commitExploration(
+    capability: MutationCapability<LessonState>,
+    beat: BeatRecord,
+    question?: string,
+  ): number {
+    return capability.write(draft => {
+      draft.beats.push(beat);
+      if (question) {
+        draft.question = question;
+      }
+    });
+  }
+
   public prepare(): PreparedGeneration<LessonState> {
     return this.authority.prepare();
   }

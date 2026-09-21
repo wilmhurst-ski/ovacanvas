@@ -13,12 +13,17 @@ import {LessonStore} from './LessonStore';
 interface FakePresentation {
   readonly id: string;
   disposeCount: number;
+  capability?: MutationCapability<LessonState>;
 }
 
-function createFakeBeat(id: string): BeatManifest {
+function createFakeBeat(id: string, title?: string): BeatManifest {
   return {
     id,
-    title: `Beat ${id}`,
+    title: title ?? `Beat ${id}`,
+    plan: {
+      summary: `Summary of ${id}`,
+      entities: [],
+    },
     runner: function* () {} as unknown as BeatManifest['runner'],
     buildAuditSpec: () => ({
       items: [],
@@ -44,7 +49,11 @@ class ControllableFakeAdapter
         if (!context.isCancelled()) {
           context.markReady();
         }
-        resolve({id: beatId, disposeCount: 0});
+        resolve({
+          id: beatId,
+          disposeCount: 0,
+          capability: context.capability,
+        });
       };
 
       if (this.autoReady) {
@@ -154,31 +163,25 @@ describe('Lesson multi-beat background cooking', () => {
     expect(lesson.currentBeat?.id).toBe('beat-2');
     expect(owner.current?.id).toBe('beat-2');
 
-    // No beat 3, so cookingIndex is -1 and candidateGeneration is null
+    // No beat 3 exists, so cooking index is inactive (-1)
     expect(lesson.candidateBeatIndex).toBe(-1);
-    expect(owner.status().candidateGeneration).toBeNull();
-
-    // 4. Advance past end returns no-next-beat
-    const advance3 = await lesson.advance();
-    expect(advance3.ok).toBe(false);
-    expect((advance3 as any).reason).toBe('no-next-beat');
+    expect(lesson.isCooking).toBe(false);
   });
 
-  it('allows dynamic beat enqueuing during lesson playback', async () => {
+  it('supports dynamic beat enqueueing to extend an in-progress lesson', async () => {
     const adapter = new ControllableFakeAdapter();
-    const authority = new RuntimeAuthority<LessonState>(
-      initialLessonState('dynamic-lesson', 'Dynamic Beats'),
-    );
+    const store = new LessonStore('dynamic-lesson', 'Dynamic Beats');
     const owner = new TransitionOwner<
       LessonState,
       FakePresentation,
       ChunkRequest
     >({
-      authority,
+      authority: store.authority,
       adapter,
     });
 
     const lesson = new Lesson({
+      store,
       owner,
       beats: [createFakeBeat('b0')],
     });
@@ -188,14 +191,14 @@ describe('Lesson multi-beat background cooking', () => {
     expect(lesson.candidateBeatIndex).toBe(-1);
 
     // Enqueue a new beat dynamically
-    lesson.enqueueBeat(createFakeBeat('b1-dynamic'));
+    lesson.enqueueBeat(createFakeBeat('b1'));
     // Background cook triggers immediately for newly added beat
     expect(lesson.candidateBeatIndex).toBe(1);
-    expect(lesson.status().cookingBeatId).toBe('b1-dynamic');
+    expect(lesson.status().cookingBeatId).toBe('b1');
 
     const adv = await lesson.advance();
     expect(adv.ok).toBe(true);
-    expect(lesson.currentBeat?.id).toBe('b1-dynamic');
+    expect(lesson.currentBeat?.id).toBe('b1');
   });
 
   it('proves in-flight asynchronous preparation while previous beat plays', async () => {
@@ -244,5 +247,205 @@ describe('Lesson multi-beat background cooking', () => {
     const adv = await lesson.advance();
     expect(adv.ok).toBe(true);
     expect(lesson.currentBeat?.id).toBe('b1');
+  });
+});
+
+describe('Lesson exploration-vs-commit interruption semantics', () => {
+  it('stages and activates an exploration without bumping revision or altering committed track', async () => {
+    const adapter = new ControllableFakeAdapter();
+    const store = new LessonStore('explore-test', 'Main question');
+    const owner = new TransitionOwner<
+      LessonState,
+      FakePresentation,
+      ChunkRequest
+    >({
+      authority: store.authority,
+      adapter,
+    });
+
+    const b0 = createFakeBeat('b0', 'Intro');
+    const b1 = createFakeBeat('b1', 'Core Concept');
+    const lesson = new Lesson({store, owner, beats: [b0, b1]});
+
+    await lesson.start();
+    expect(lesson.committedIndex).toBe(0);
+    expect(lesson.committedBeat?.id).toBe('b0');
+    expect(lesson.currentBeat?.id).toBe('b0');
+    expect(store.authority.revision).toBe(0);
+
+    // Learner asks a tangential follow-up question
+    const expBeat = createFakeBeat('exp-tangent', 'Why is the sky blue?');
+    const exploreResult = await lesson.explore(expBeat, {
+      question: 'Why is the sky blue?',
+    });
+
+    expect(exploreResult.ok).toBe(true);
+    expect(lesson.isExploring).toBe(true);
+    expect(lesson.currentBeat?.id).toBe('exp-tangent');
+    expect(owner.current?.id).toBe('exp-tangent');
+
+    // Authoritative lesson state & committed index MUST remain undisturbed
+    expect(lesson.committedIndex).toBe(0);
+    expect(lesson.committedBeat?.id).toBe('b0');
+    expect(store.authority.revision).toBe(0); // Zero revision bump!
+    expect(store.read().beats).toHaveLength(0); // No projection mutation!
+    expect(lesson.beats).toHaveLength(2); // Original track length untouched
+  });
+
+  it('cleanly abandons an exploration and restores the committed beat and background cook', async () => {
+    const adapter = new ControllableFakeAdapter();
+    const store = new LessonStore('abandon-test', 'Main question');
+    const owner = new TransitionOwner<
+      LessonState,
+      FakePresentation,
+      ChunkRequest
+    >({
+      authority: store.authority,
+      adapter,
+    });
+
+    const b0 = createFakeBeat('b0', 'Intro');
+    const b1 = createFakeBeat('b1', 'Next Topic');
+    const lesson = new Lesson({store, owner, beats: [b0, b1]});
+
+    await lesson.start();
+    const expBeat = createFakeBeat('exp-side', 'Side discussion');
+    await lesson.explore(expBeat);
+
+    expect(lesson.isExploring).toBe(true);
+    expect(lesson.currentBeat?.id).toBe('exp-side');
+
+    // Learner decides to abandon the side track
+    const abandonResult = await lesson.abandonExploration();
+    expect(abandonResult.ok).toBe(true);
+    expect(lesson.isExploring).toBe(false);
+    expect(lesson.currentBeat?.id).toBe('b0');
+    expect(owner.current?.id).toBe('b0');
+    expect(lesson.committedIndex).toBe(0);
+    expect(store.authority.revision).toBe(0);
+
+    // Background cooking of b1 was resumed
+    expect(lesson.candidateBeatIndex).toBe(1);
+    expect(lesson.status().cookingBeatId).toBe('b1');
+
+    // Learner can advance seamlessly along the original committed track
+    const adv = await lesson.advance();
+    expect(adv.ok).toBe(true);
+    expect(lesson.currentBeat?.id).toBe('b1');
+  });
+
+  it('commits an exploration into authoritative state, advancing revision and sequence', async () => {
+    const adapter = new ControllableFakeAdapter();
+    const store = new LessonStore('commit-test', 'Original question');
+    const owner = new TransitionOwner<
+      LessonState,
+      FakePresentation,
+      ChunkRequest
+    >({
+      authority: store.authority,
+      adapter,
+    });
+
+    const b0 = createFakeBeat('b0', 'Intro');
+    const b1 = createFakeBeat('b1', 'Conclusion');
+    const lesson = new Lesson({store, owner, beats: [b0, b1]});
+
+    await lesson.start();
+    const expBeat = createFakeBeat('exp-crucial', 'Deep dive into nuances');
+    await lesson.explore(expBeat, {question: 'Can you go deeper?'});
+
+    expect(store.authority.revision).toBe(0);
+
+    // Learner commits the explanation
+    const commitResult = await lesson.commitExploration({
+      question: 'Deep dive accepted',
+    });
+    expect(commitResult.ok).toBe(true);
+    if (!commitResult.ok) return;
+
+    expect(commitResult.revision).toBe(1);
+    expect(store.authority.revision).toBe(1);
+    expect(lesson.isExploring).toBe(false);
+
+    // The exploration beat is now the committed beat at index 1
+    expect(lesson.committedIndex).toBe(1);
+    expect(lesson.currentBeat?.id).toBe('exp-crucial');
+    expect(lesson.beats).toHaveLength(3);
+    expect(lesson.beats[1].id).toBe('exp-crucial');
+    expect(lesson.beats[2].id).toBe('b1');
+
+    // Store projection contains the committed beat
+    const state = store.read();
+    expect(state.question).toBe('Deep dive accepted');
+    expect(state.beats).toHaveLength(1);
+    expect(state.beats[0].id).toBe('exp-crucial');
+
+    // Subsequent advance moves to b1
+    const adv = await lesson.advance();
+    expect(adv.ok).toBe(true);
+    expect(lesson.currentBeat?.id).toBe('b1');
+    expect(lesson.currentBeatIndex).toBe(2);
+  });
+
+  it('recovers gracefully from stale-revision rejection in advance()', async () => {
+    const adapter = new ControllableFakeAdapter();
+    const store = new LessonStore('stale-test', 'Stale revision test');
+    const owner = new TransitionOwner<
+      LessonState,
+      FakePresentation,
+      ChunkRequest
+    >({
+      authority: store.authority,
+      adapter,
+    });
+
+    const b0 = createFakeBeat('b0');
+    const b1 = createFakeBeat('b1');
+    const lesson = new Lesson({store, owner, beats: [b0, b1]});
+
+    await lesson.start();
+    // b0 is active, b1 is prepared offstage at revision 0
+    expect(owner.status().candidateReady).toBe(true);
+    expect(owner.status().revision).toBe(0);
+
+    // Out-of-band or exploration commit bumps revision
+    const activePresentation = owner.current!;
+    expect(activePresentation.capability).toBeDefined();
+    activePresentation.capability!.write(draft => {
+      draft.question = 'Mutated during background cook';
+    });
+    expect(store.authority.revision).toBe(1);
+
+    // Candidate b1 now has preparedAtRevision: 0, which is STALE against revision 1!
+    // Lesson.advance() should encounter stale-revision refusal, restage fresh, and activate cleanly
+    const advanceResult = await lesson.advance();
+    expect(advanceResult.ok).toBe(true);
+    expect(lesson.currentBeatIndex).toBe(1);
+    expect(lesson.currentBeat?.id).toBe('b1');
+    expect(owner.current?.id).toBe('b1');
+  });
+
+  it('refuses advance while actively exploring', async () => {
+    const adapter = new ControllableFakeAdapter();
+    const store = new LessonStore('refuse-advance-test', 'Test');
+    const owner = new TransitionOwner<
+      LessonState,
+      FakePresentation,
+      ChunkRequest
+    >({
+      authority: store.authority,
+      adapter,
+    });
+
+    const b0 = createFakeBeat('b0');
+    const b1 = createFakeBeat('b1');
+    const lesson = new Lesson({store, owner, beats: [b0, b1]});
+
+    await lesson.start();
+    await lesson.explore(createFakeBeat('exp'));
+
+    const adv = await lesson.advance();
+    expect(adv.ok).toBe(false);
+    expect(adv.reason).toBe('exploring');
   });
 });

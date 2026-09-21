@@ -21,6 +21,18 @@ import {
   dropEmptyMayTouchReasons,
 } from './repair';
 
+import {TransitionDriver} from './TransitionDriver';
+
+export interface BeatAdapterOptions {
+  /** Visual crossfade transition duration in milliseconds. Defaults to 300ms. */
+  readonly transitionDurationMs?: number;
+  readonly onTransitionComplete?: (
+    incoming: BeatPresentation,
+    outgoing: BeatPresentation | null,
+  ) => void;
+  readonly transitionDriver?: TransitionDriver;
+}
+
 /**
  * Bounds `recalculate()`/render cost per attempt and keeps enough slack in
  * a beat's own playtime for the *next* beat to finish cooking behind it.
@@ -64,13 +76,27 @@ export class BeatAdapter
   /** The most recent audit report per generation, for callers to inspect a refusal. */
   public readonly lastReport = new Map<number, AuditReport>();
 
+  public readonly transitionDriver: TransitionDriver;
+  private readonly onTransitionComplete?: (
+    incoming: BeatPresentation,
+    outgoing: BeatPresentation | null,
+  ) => void;
+
   /**
    * The live geometry guard for each prepared beat, plus the disposer that
    * removes it. See {@link guardGeometry}.
    */
   private readonly guards = new Map<BeatPresentation, () => void>();
 
-  public constructor(private readonly stageSlot: HTMLElement) {}
+  public constructor(
+    private readonly stageSlot: HTMLElement,
+    options: BeatAdapterOptions = {},
+  ) {
+    this.transitionDriver =
+      options.transitionDriver ??
+      new TransitionDriver({durationMs: options.transitionDurationMs ?? 300});
+    this.onTransitionComplete = options.onTransitionComplete;
+  }
 
   public async prepare(
     context: PreparationContext<LessonState>,
@@ -83,6 +109,7 @@ export class BeatAdapter
       }
 
       presentation = new BeatPresentation(request.beat);
+      presentation.capability = context.capability;
 
       // Readiness is a real rendered frame, not a returned constructor.
       let rendered = await presentation.renderOnce();
@@ -323,37 +350,33 @@ export class BeatAdapter
   }
 
   /**
-   * @remarks
-   * Instant swap, not a crossfade: `incoming` is always fully visible the
-   * moment it activates. `outgoing`, if any, is left at full opacity too -
-   * harmless, since `incoming.container` is appended after it and covers it
-   * completely - until `retireOutgoing()` removes it from the DOM.
+   * Make incoming presentation visible and begin playback, crossfading from outgoing.
    *
-   * A real crossfade (fade incoming in while fading outgoing out over time)
-   * needs a driver that owns a rAF loop to animate both opacities across
-   * frames, which is deliberately out of scope for this milestone (see the
-   * project plan's "Transition driver" item). Setting `incoming.opacity = 0`
-   * here in anticipation of that driver, with nothing yet built to ever
-   * bring it back up, left every beat after the first permanently invisible
-   * once activated - a real bug, only found by actually rendering and
-   * looking at a beat past the first.
+   * @remarks
+   * Smooth crossfade driven by TransitionDriver: incoming fades from 0 to 1
+   * while outgoing fades from 1 to 0 over `transitionDurationMs` (default 300ms).
+   * Upon crossfade completion, `onTransitionComplete` fires to retire outgoing.
+   * Under interruption mid-flight, TransitionDriver cancels cleanly and cleans
+   * up the interrupted outgoing presentation.
    */
   public activate(
     incoming: BeatPresentation,
     outgoing: BeatPresentation | null,
   ): void {
     this.stageSlot.append(incoming.container);
-    incoming.opacity = 1;
-    if (outgoing) outgoing.opacity = 1;
-    // Visibility and playback start together: a beat that is on screen but
-    // frozen is not an explanation, it is a diagram.
-    incoming.play();
+    this.transitionDriver.startTransition(incoming, outgoing, () => {
+      this.onTransitionComplete?.(incoming, outgoing);
+    });
   }
 
   public dispose(presentation: BeatPresentation): void {
     this.guards.get(presentation)?.();
     this.guards.delete(presentation);
     presentation.dispose();
+  }
+
+  public disposeAdapter(): void {
+    this.transitionDriver.dispose();
   }
 
   /**

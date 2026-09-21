@@ -10,6 +10,11 @@ import {createOpenerBeat} from '../presentation/openerBeat';
 import type {BeatStagingResult} from './BeatStagingCoordinator';
 import {BeatStagingCoordinator} from './BeatStagingCoordinator';
 
+export interface LessonHostOptions {
+  /** Visual crossfade transition duration in milliseconds. Defaults to 300ms. */
+  readonly transitionDurationMs?: number;
+}
+
 /**
  * Owns one lesson's staging pipeline: a `LessonStore`, a `TransitionOwner`
  * wired to a gate-checked `BeatAdapter`, and the visible slot beats are
@@ -35,6 +40,7 @@ export class LessonHost {
     lessonId: string,
     question: string,
     container: HTMLElement,
+    options: LessonHostOptions = {},
   ) {
     this.store = new LessonStore(lessonId, question);
 
@@ -42,7 +48,12 @@ export class LessonHost {
     this.stageSlot.className = 'ovc-lesson-stage';
     container.append(this.stageSlot);
 
-    this.adapter = new BeatAdapter(this.stageSlot);
+    this.adapter = new BeatAdapter(this.stageSlot, {
+      transitionDurationMs: options.transitionDurationMs,
+      onTransitionComplete: () => {
+        this.coordinator.retireOutgoing();
+      },
+    });
     const owner = new TransitionOwner<
       LessonState,
       BeatPresentation,
@@ -126,6 +137,7 @@ export class LessonHost {
   }
 
   public dispose(): void {
+    this.adapter.disposeAdapter();
     this.coordinator.dispose();
     this.store.dispose();
     this.stageSlot.remove();

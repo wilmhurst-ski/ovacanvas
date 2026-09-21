@@ -82,7 +82,7 @@ export function compileBeatSource(
   projectRoot: string,
   virtualFileName = '__beat__.ts',
 ): CompileResult {
-  let entry = compilerCache.get(projectRoot);
+  let entry = COMPILER_CACHE.get(projectRoot);
   if (!entry) {
     const configPath = ts.findConfigFile(
       projectRoot,

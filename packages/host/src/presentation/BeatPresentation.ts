@@ -13,6 +13,9 @@ import {
 import type {BeatManifest} from './BeatManifest';
 import {buildBeatProject} from './buildBeatProject';
 
+import type {MutationCapability} from '@ovacanvas/core/lib/internal';
+import type {LessonState} from '../lesson/LessonState';
+
 export const BEAT_SIZE = new Vector2(1920, 1080);
 
 function wait(ms: number): Promise<void> {
@@ -36,6 +39,7 @@ export class BeatPresentation {
   public readonly player: Player;
   public readonly container: HTMLElement;
 
+  public capability: MutationCapability<LessonState> | null = null;
   public renderCount = 0;
   public ready = false;
   public disposeCount = 0;
