@@ -135,7 +135,7 @@ const MODULE_CONTRACT = `You write ONE beat of a visual lesson for the OvaCanvas
 REQUIRED SHAPE - exactly this, or the beat is rejected:
 
   import {Txt, Rect, Circle, Line, Latex, makeScene2D, theme} from '@ovacanvas/2d';
-  import {BBox, waitFor, all, easeInOutCubic} from '@ovacanvas/core';
+  import {BBox, Origin, waitFor, all, easeInOutCubic} from '@ovacanvas/core';
 
   let title: Txt;   // declare one "let" for EVERY node you need to reference below
 
@@ -170,7 +170,7 @@ INTENTIONAL CONTACT needs authorization. The audit reports any two registered it
 A background/container shape that legitimately contains other content can authorize everything at once with mayTouch: new Map([['*', 'background panel other content sits on']]) - but only for a genuine background, never to wave away an overlap between two things that were never meant to touch. Every mayTouch entry needs a non-empty reason; a blank one is treated as no authorization at all.
 
 PLACEMENT - do not hand-pick coordinates for a group of related items and hope. Declare the relationship and let the engine place them:
-- A label that belongs beside a point or node: AnchoredLabel with {anchor, origin, distance} (or AnchoredLatex for maths). It follows the anchor if the anchor moves.
+- A label that belongs beside a point or node: AnchoredLabel with {anchor: node, origin: Origin.Right, distance: 24}. Origin is an enum from @ovacanvas/core (Origin.Top, Origin.Bottom, Origin.Left, Origin.Right), NOT a coordinate array.
 - Several cards or labels that must not overlap: arrangeWithoutOverlap(items) with each item's desired {id, x, y, width, height}, and use the positions it returns.
 - N items around a focal point: distributeOrbiting(count, {center, radius}).
 Computing an exact coordinate from a known value is fine. GUESSING one to avoid a neighbour is how beats get rejected.
@@ -181,6 +181,17 @@ MOTION - any signal-backed prop can be animated, and every yield* blocks until t
 - yield* node.scale(1.5, seconds)
 - yield* node.fill(theme().coral, seconds)
 - yield* all(a.opacity(1, 1), b.position([0, 0], 1)) to run several at once.
+
+THEME TOKENS - call theme() for palette colors:
+- theme().paper (canvas background), theme().clearField (surface/card background)
+- theme().ink (primary text and lines), theme().secondaryInk (muted labels and notes)
+- theme().hairline (borders and grid lines), theme().blue (primary series)
+- theme().cyan (secondary cues), theme().coral (accent/highlight), theme().yellow (callouts)
+- theme().green (valid/success), theme().magenta (tertiary)
+Do NOT use non-existent tokens like theme().primary, theme().accent, theme().text, theme().surface, or theme().border.
+
+SHAPES & CONSTRUCTORS - Every component constructor (new Rect({...}), new Circle({...}), new Txt({...}), new Line({...})) takes exactly ONE argument: a props object. Never pass multiple arguments like new Rect(100, 50).
+Circle takes size: [diameter, diameter] or width and height. It does NOT have a radius prop. Rect takes size: [width, height], fill, stroke, lineWidth, radius (corner radius).
 
 NEVER animate position, scale, width or height for an ENTRANCE. Once a shape's final size and position are fixed relative to its neighbours, both stay fixed - animate ONLY opacity for its entrance, with a stagger if you want it lively. A shape that scales or slides in sweeps its real footprint through whatever is already at the points along that path, and the audit samples mid-transition frames and correctly reports a real collision that no repair can undo. A "growing" bar also starts from a genuinely empty box, which is a separate failure.
 
@@ -195,7 +206,7 @@ CRITICAL - COLLECTIONS. The scene generator runs MORE THAN ONCE (the engine reca
 
 EVERY array you build needs its own entries in buildAuditSpec's items. An array of nodes that is drawn but not registered is an unregistered-node failure, and it is the most common mistake once a scene has more than one generated collection.
 
-COORDINATE TYPES - when you compute a coordinate you will reuse, store it as an OBJECT, "const p = {x: 10, y: 20}", never an array. A bare "[x, y]" stored in a variable widens to "number[]", which is not assignable to a point type and fails to compile. Inline literals written directly in a props object ("position: [x, y]") are fine.
+COORDINATE TYPES - when you compute a coordinate you will reuse, store it as an OBJECT, "const p = {x: 10, y: 20}", never an array. A bare "[x, y]" stored in a variable widens to "number[]", which is not assignable to a point type and fails to compile. Inline literals written directly in a props object ("position: [x, y]") are fine. Props like width, height, opacity, and lineWidth take a single number (e.g. width: 100), never an array. To set dimensions together on Rect or Circle, use size: [width, height].
 
 TIMING - keep the whole beat under about 4.5 seconds of yield*/waitFor time. The hard cap is 6s and going over it cannot be repaired mechanically, so it always costs a whole regeneration. A title plus one clear diagram plus at most a couple of supporting labels is the right density for one beat; this is one held idea, not a whole lesson.
 
@@ -234,4 +245,55 @@ export function buildSystemPrompt(apiSection: string): string {
   return apiSection
     ? `${MODULE_CONTRACT}\n\n${apiSection}\n`
     : `${MODULE_CONTRACT}\n`;
+}
+
+export interface CompactApiOptions {
+  readonly twoD?: readonly string[];
+  readonly core?: readonly string[];
+}
+
+/**
+ * A concise API section for token-constrained providers (e.g. Groq with TPM limits),
+ * listing only the essential components and animation primitives rather than all 440+ exports.
+ */
+export function buildCompactApiSection(
+  options: CompactApiOptions = {},
+): string {
+  const twoD = options.twoD ?? [
+    'Txt',
+    'Rect',
+    'Circle',
+    'Line',
+    'Latex',
+    'makeScene2D',
+    'theme',
+    'AnchoredLabel',
+    'AnchoredLatex',
+    'arrangeWithoutOverlap',
+    'distributeOrbiting',
+  ];
+  const core = options.core ?? [
+    'BBox',
+    'waitFor',
+    'all',
+    'easeInOutCubic',
+    'easeOutBack',
+    'clamp',
+  ];
+
+  return [
+    'VERIFIED ESSENTIAL EXPORTS:',
+    `- '@ovacanvas/2d': ${twoD.join(', ')}`,
+    `- '@ovacanvas/core': ${core.join(', ')}`,
+  ].join('\n');
+}
+
+/**
+ * Compact system prompt for token-constrained providers per Section 6 of MASTER_BUILD_PLAN.md.
+ */
+export function buildCompactSystemPrompt(
+  options: CompactApiOptions = {},
+): string {
+  const api = buildCompactApiSection(options);
+  return `${MODULE_CONTRACT}\n\n${api}\n`;
 }

@@ -18,6 +18,7 @@ import {
   type ProviderSpec,
   type TokenUsage,
 } from './providers';
+import {buildCompactApiSection} from './systemPrompt';
 
 /**
  * Topic in, audit-ready beat module out: the model writes, the compiler
@@ -213,6 +214,20 @@ function hintFor(diagnostics: readonly CompileDiagnostic[]): string {
         'infers as `number[]` and will not compile where a point is expected.',
     );
   }
+  if (/number\[\].*not assignable.*SignalValue<number>/i.test(text)) {
+    hints.push(
+      'Props like width, height, lineWidth, fontSize, and opacity take a single number, not an array. To set both width and height together on Rect or Circle, use size: [width, height], not width: [w, h].',
+    );
+  }
+  if (
+    /Object literal may only specify known properties, and '[xy]' does not exist in type/i.test(
+      text,
+    )
+  ) {
+    hints.push(
+      'To set or animate 2D position, call node.position({x, y}) or node.position([x, y]). node.x() and node.y() take a single number, not an {x, y} object.',
+    );
+  }
   if (/Cannot find name/i.test(text)) {
     hints.push(
       'A name you used is not imported. Import it from `@ovacanvas/2d` or `@ovacanvas/core`.',
@@ -224,14 +239,37 @@ function hintFor(diagnostics: readonly CompileDiagnostic[]): string {
         'rather than assuming a name.',
     );
   }
-  if (/Expected \d+ arguments?/i.test(text)) {
+  if (/Expected 1 arguments?, but got/i.test(text)) {
+    hints.push(
+      'Component constructors (Rect, Circle, Txt, Line) take a SINGLE props object argument, e.g. new Rect({size: [100, 50]}), not separate positional arguments.',
+    );
+  } else if (/Expected \d+ arguments?/i.test(text)) {
     hints.push(
       'A constructor or function was called with the wrong number of arguments.',
+    );
+  }
+  if (/Origin/i.test(text) && /not assignable/i.test(text)) {
+    hints.push(
+      "The 'origin' prop on AnchoredLabel/AnchoredLatex is an enum Origin from '@ovacanvas/core' (e.g. Origin.Right, Origin.Top, Origin.Bottom, Origin.Left), not a coordinate array.",
     );
   }
   if (/is not assignable to type 'BBox'|BBox/i.test(text)) {
     hints.push(
       '`safeArea` must be `new BBox(x, y, width, height)` from `@ovacanvas/core`.',
+    );
+  }
+  if (/does not exist on type 'Theme'/i.test(text)) {
+    hints.push(
+      'Theme tokens are: paper, clearField, ink, secondaryInk, hairline, blue, cyan, coral, yellow, green, magenta. Use theme().ink for text, theme().clearField for card surface, theme().hairline for border/stroke. Do not invent theme properties.',
+    );
+  }
+  if (
+    /radius.*does not exist in type 'CircleProps'|'radius' does not exist/i.test(
+      text,
+    )
+  ) {
+    hints.push(
+      "Circle takes size: [diameter, diameter] or width and height. It does not have a 'radius' prop.",
     );
   }
   return hints.length > 0 ? `\n\nLikely cause: ${hints.join(' ')}` : '';
@@ -386,10 +424,13 @@ export async function authorWithRetry(
     options.maxInfraAttempts ?? DEFAULT_MAX_INFRA_ATTEMPTS;
   const strategyId = options.strategy.id;
 
+  const apiSection =
+    spec.id === 'groq' ? buildCompactApiSection() : options.apiSection;
+
   const strategyContext = {
     topic: options.topic,
     existingSource: options.existingSource,
-    apiSection: options.apiSection,
+    apiSection,
   };
   // Built once: a strategy's prompt is a pure function of the run's context,
   // so rebuilding it per attempt would only re-do identical work.
@@ -436,14 +477,22 @@ export async function authorWithRetry(
       // Multi-key rotation per provider on rate-limit response (HTTP 429)
       const isRateLimit =
         result.detail.includes('429') || /rate limited/i.test(result.detail);
-      if (isRateLimit && rotator.rotate()) {
-        log.push({
-          attempt: contentAttempts,
-          outcome: 'provider-failed',
-          detail: `rate limit (HTTP 429) encountered; rotated to key ${rotator.currentIndex + 1}/${rotator.keyCount} for provider "${spec.id}"`,
-        });
-        contentAttempts--; // refund attempt to retry immediately with rotated key
-        continue;
+      if (isRateLimit) {
+        if (rotator.rotate()) {
+          log.push({
+            attempt: contentAttempts,
+            outcome: 'provider-failed',
+            detail: `rate limit (HTTP 429) encountered; rotated to key ${rotator.currentIndex + 1}/${rotator.keyCount} for provider "${spec.id}"`,
+          });
+          contentAttempts--; // refund attempt to retry immediately with rotated key
+          continue;
+        }
+        // If there is no other key to rotate to, respect the provider's retry window (up to 30s)
+        const waitMatch = result.detail.match(/try again in ([\d.]+)s/i);
+        const waitSec = waitMatch
+          ? Math.min(Math.ceil(parseFloat(waitMatch[1])) + 1, 30)
+          : 5;
+        await new Promise(resolve => setTimeout(resolve, waitSec * 1000));
       }
 
       if (result.kind === 'unrecoverable') {

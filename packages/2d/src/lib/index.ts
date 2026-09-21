@@ -1,3 +1,4 @@
+export {Origin} from '@ovacanvas/core';
 export * from './audit';
 export * from './code';
 export * from './components';

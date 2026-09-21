@@ -193,6 +193,9 @@ export function registerAuthoringRoutes(
       // Strategy choice is per topic, and the reason is returned to the client
       // so a run can be explained rather than just observed.
       const selection = selectStrategy(topic);
+      console.log(
+        `[authoringApi] /api/generate starting for: "${topic}" (${selection.strategy.id})`,
+      );
       const outcome = await authorWithRetry({
         topic,
         existingSource:
@@ -210,6 +213,15 @@ export function registerAuthoringRoutes(
         projectRoot: COMPILE_ROOT,
         env,
       });
+      console.log(
+        `[authoringApi] /api/generate finished: ok=${outcome.ok} strategy=${outcome.strategy} provider=${outcome.provider} attempts=${outcome.ok ? outcome.attempts : outcome.reason}`,
+      );
+      if (!outcome.ok) {
+        console.log(
+          '[authoringApi] Failure log:',
+          JSON.stringify(outcome.log, null, 2),
+        );
+      }
       return response.end(
         JSON.stringify({...outcome, strategyReason: selection.reason}),
       );

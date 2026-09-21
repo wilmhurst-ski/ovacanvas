@@ -21,11 +21,16 @@ const browser = await chromium.launch({headless: true});
 const page = await browser.newPage({viewport: {width: 1280, height: 900}});
 
 const pageErrors = [];
-page.on('pageerror', error => pageErrors.push(String(error)));
+page.on('pageerror', error => {
+  pageErrors.push(String(error));
+  console.log('PAGE ERROR:', error);
+});
 page.on('console', message => {
   if (message.type() === 'error') pageErrors.push(`console: ${message.text()}`);
+  console.log(`[browser console ${message.type()}] ${message.text()}`);
 });
 
+let statusTimer;
 try {
   await page.goto(url, {waitUntil: 'domcontentloaded'});
   await page.waitForFunction(
@@ -38,12 +43,26 @@ try {
   );
   console.log('HEALTH', await page.textContent('#status'));
 
+  let lastStatus = '';
+  statusTimer = setInterval(async () => {
+    try {
+      const s = await page.textContent('#status');
+      if (s && s !== lastStatus) {
+        lastStatus = s;
+        console.log('STATUS UPDATE:', s);
+      }
+    } catch {}
+  }, 1000);
+
   await page.fill('#question', question);
   await page.click('#ask-button');
   console.log('ASKED', question);
 
   await page.waitForFunction(
-    () => document.getElementById('status').textContent.includes('On screen.'),
+    () => {
+      const el = document.getElementById('status');
+      return el && (el.textContent.includes('On screen.') || el.textContent.includes('simpler version') || el.textContent.includes('refused'));
+    },
     undefined,
     {timeout: 240000},
   );
@@ -89,5 +108,6 @@ try {
   await page.screenshot({path: screenshot}).catch(() => {});
   process.exitCode = 1;
 } finally {
+  if (statusTimer) clearInterval(statusTimer);
   await browser.close();
 }
