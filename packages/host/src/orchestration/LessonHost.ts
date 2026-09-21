@@ -6,6 +6,7 @@ import {LessonStore} from '../lesson/LessonStore';
 import {BeatAdapter} from '../presentation/BeatAdapter';
 import type {BeatManifest} from '../presentation/BeatManifest';
 import type {BeatPresentation} from '../presentation/BeatPresentation';
+import {BeatScrubber} from '../presentation/BeatScrubber';
 import {createOpenerBeat} from '../presentation/openerBeat';
 import type {BeatStagingResult} from './BeatStagingCoordinator';
 import {BeatStagingCoordinator} from './BeatStagingCoordinator';
@@ -13,6 +14,8 @@ import {BeatStagingCoordinator} from './BeatStagingCoordinator';
 export interface LessonHostOptions {
   /** Visual crossfade transition duration in milliseconds. Defaults to 300ms. */
   readonly transitionDurationMs?: number;
+  /** Whether to attach the timeline scrubber interactivity control. Defaults to true. */
+  readonly showScrubber?: boolean;
 }
 
 /**
@@ -33,6 +36,7 @@ export interface LessonHostOptions {
 export class LessonHost {
   public readonly store: LessonStore;
   public readonly stageSlot: HTMLElement;
+  public readonly scrubber: BeatScrubber | null = null;
   private readonly adapter: BeatAdapter;
   private readonly coordinator: BeatStagingCoordinator<BeatPresentation>;
 
@@ -48,10 +52,17 @@ export class LessonHost {
     this.stageSlot.className = 'ovc-lesson-stage';
     container.append(this.stageSlot);
 
+    if (options.showScrubber ?? true) {
+      this.scrubber = new BeatScrubber(container);
+    }
+
     this.adapter = new BeatAdapter(this.stageSlot, {
       transitionDurationMs: options.transitionDurationMs,
       onTransitionComplete: () => {
         this.coordinator.retireOutgoing();
+        if (this.scrubber) {
+          this.scrubber.attach(this.coordinator.current);
+        }
       },
     });
     const owner = new TransitionOwner<
@@ -61,6 +72,11 @@ export class LessonHost {
     >({
       authority: this.store.authority,
       adapter: this.adapter,
+      onPhaseChanged: () => {
+        if (this.scrubber) {
+          this.scrubber.attach(this.coordinator.current);
+        }
+      },
     });
     this.coordinator = new BeatStagingCoordinator(owner);
   }
@@ -137,6 +153,7 @@ export class LessonHost {
   }
 
   public dispose(): void {
+    this.scrubber?.dispose();
     this.adapter.disposeAdapter();
     this.coordinator.dispose();
     this.store.dispose();

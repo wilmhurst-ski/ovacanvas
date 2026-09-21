@@ -238,6 +238,19 @@ export class BeatPresentation {
     this.player.sleep();
   }
 
+  /**
+   * Request a playhead seek to a specific frame and wake the player to render it.
+   *
+   * @remarks
+   * Uses the identical real render loop and stage pipeline as autoplay.
+   */
+  public seek(frame: number): void {
+    if (this.disposeCount > 0) return;
+    this.player.requestSeek(frame);
+    this.player.requestRender();
+    this.player.wake();
+  }
+
   public dispose(): void {
     this.playing = false;
     this.disposeCount++;
