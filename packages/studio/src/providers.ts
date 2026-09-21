@@ -281,6 +281,21 @@ export const PROVIDERS: Readonly<Record<string, ProviderSpec>> = {
     defaultModel: 'nvidia/nemotron-3-super-120b-a12b',
     ...openAiCompatible('https://integrate.api.nvidia.com/v1/chat/completions'),
   },
+  apmix: {
+    id: 'apmix',
+    envKey: 'APMIX_API_KEY',
+    defaultModel: 'deepseek-v4.1-flash-free',
+    ...openAiCompatible('https://api.apmix.ai/v1/chat/completions'),
+    body: (model: string, system: string, user: string) => ({
+      model,
+      messages: [
+        {role: 'system', content: system},
+        {role: 'user', content: user},
+      ],
+      max_tokens: 3500,
+      temperature: 0.2,
+    }),
+  },
 };
 
 /** The provider a run should use, and where that choice came from. */

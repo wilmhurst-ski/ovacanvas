@@ -117,8 +117,9 @@ describe.skipIf(!LIVE)('provider connectivity', () => {
       }
 
       const started = Date.now();
+      const effectiveModel = env.OVACANVAS_MODEL ?? spec.defaultModel;
       const result = await complete(spec, key, {
-        model: spec.defaultModel,
+        model: effectiveModel,
         system: 'You are a health check. Answer with one word.',
         user: 'Reply with exactly: OK',
         timeoutMs: 30000,
@@ -135,7 +136,7 @@ describe.skipIf(!LIVE)('provider connectivity', () => {
               ? 'QUOTA'
               : 'FAIL';
       lines.push(
-        `  ${mark} ${id.padEnd(12)} ${String(ms).padStart(6)}ms  ${spec.defaultModel}` +
+        `  ${mark} ${id.padEnd(12)} ${String(ms).padStart(6)}ms  ${effectiveModel}` +
           (advice ? `\n         -> ${advice}` : ''),
       );
       if (verdict !== 'ok') broken.push(`${id} (${verdict})`);

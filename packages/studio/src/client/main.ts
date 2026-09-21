@@ -279,6 +279,10 @@ async function authorInto(
   telemetry.finish(STAGE.stageAndAudit);
 
   if (!staged.ok) {
+    const report = host.lastReportFor(
+      host.status().stagingGeneration ?? host.status().activeGeneration ?? 1,
+    );
+    console.warn('[ovc] staged not ok:', staged, 'findings:', report?.findings);
     // Authored and compiled, but its own rendered geometry did not pass the
     // audit and could not be repaired - so it is refused rather than shown.
     // This is the product's whole promise, made visible.

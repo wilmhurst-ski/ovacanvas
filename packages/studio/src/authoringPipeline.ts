@@ -425,7 +425,9 @@ export async function authorWithRetry(
   const strategyId = options.strategy.id;
 
   const apiSection =
-    spec.id === 'groq' ? buildCompactApiSection() : options.apiSection;
+    spec.id === 'groq' || spec.id === 'apmix'
+      ? buildCompactApiSection()
+      : options.apiSection;
 
   const strategyContext = {
     topic: options.topic,
