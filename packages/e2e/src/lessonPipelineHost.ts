@@ -7,6 +7,7 @@ import {
   LessonHost,
   attemptMechanicalRepair,
   createFallbackBeat,
+  createHarmonicOscillatorBeat,
   resolveBeatSource,
   type BeatAuditSpec,
   type BeatManifest,
@@ -39,7 +40,8 @@ export type BeatKind =
   | 'fixed'
   | 'repairable'
   | 'coverage-gap'
-  | 'advisory';
+  | 'advisory'
+  | 'simulation';
 
 /**
  * Big enough that mechanical repair provably cannot resolve the overlap:
@@ -249,6 +251,11 @@ function buildBeat(kind: BeatKind): BeatManifest {
         'advisory',
         'A clean beat with an opinionated review',
       );
+    case 'simulation':
+      return createHarmonicOscillatorBeat(
+        'sim-oscillator',
+        'Damped Harmonic Oscillator',
+      );
   }
 }
 
@@ -380,6 +387,55 @@ export class LessonPipelineHarness {
         ? {beatId: host.outgoing.manifest.id, opacity: host.outgoing.opacity}
         : null,
     };
+  }
+
+  public getScrubberState(): unknown {
+    return this.host?.scrubber?.getState() ?? null;
+  }
+
+  public async scrubToRatio(ratio: number): Promise<void> {
+    const host = this.requireHost();
+    const scrubber = host.scrubber;
+    if (!scrubber) throw new Error('Scrubber is not present on host');
+    scrubber.seekToRatio(ratio);
+    const current = host.current;
+    if (current) {
+      for (let i = 0; i < 6; i++) {
+        await current.renderOnce();
+        await new Promise(resolve => setTimeout(resolve, 60));
+      }
+    }
+  }
+
+  public async startScrub(ratio = 0.5): Promise<void> {
+    const host = this.requireHost();
+    const scrubber = host.scrubber;
+    if (!scrubber) throw new Error('Scrubber is not present on host');
+    const rect = scrubber.trackElement.getBoundingClientRect();
+    const clientX = rect.left + rect.width * ratio;
+    scrubber.trackElement.dispatchEvent(
+      new PointerEvent('pointerdown', {clientX, pointerId: 1, bubbles: true}),
+    );
+  }
+
+  public async moveScrub(ratio: number): Promise<void> {
+    const host = this.requireHost();
+    const scrubber = host.scrubber;
+    if (!scrubber) throw new Error('Scrubber is not present on host');
+    const rect = scrubber.trackElement.getBoundingClientRect();
+    const clientX = rect.left + rect.width * ratio;
+    window.dispatchEvent(
+      new PointerEvent('pointermove', {clientX, pointerId: 1, bubbles: true}),
+    );
+  }
+
+  public async endScrub(): Promise<void> {
+    const host = this.requireHost();
+    const scrubber = host.scrubber;
+    if (!scrubber) throw new Error('Scrubber is not present on host');
+    window.dispatchEvent(
+      new PointerEvent('pointerup', {clientX: 0, pointerId: 1, bubbles: true}),
+    );
   }
 
   public async stage(kind: BeatKind): Promise<unknown> {
@@ -771,6 +827,7 @@ export class LessonPipelineHarness {
       current: summarize(host.current),
       outgoing: summarize(host.outgoing),
       lessonStatus: this.lesson?.status() ?? null,
+      scrubber: host.scrubber?.getState() ?? null,
     };
   }
 

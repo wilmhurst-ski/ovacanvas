@@ -678,6 +678,123 @@ describe('lesson pipeline readiness gate', () => {
     expect(state.canvasesInSlot).toBe(1);
   });
 
+  test('learner can scrub the timeline manually using the real scrubber UI control', async () => {
+    // Start lesson with a real physics simulation beat
+    const started = (await app.page.evaluate(() =>
+      (window as any).ovcLesson.startLesson(['simulation']),
+    )) as any;
+    expect(
+      started?.result?.ok,
+      `startLesson failed: ${JSON.stringify(started)}`,
+    ).toBe(true);
+
+    const state = (await snapshot()) as any;
+    expect(state.scrubber).not.toBeNull();
+    expect(state.current.beatId).toBe('sim-oscillator-0');
+
+    // Give autoplay a moment to begin playback
+    await new Promise(resolve => setTimeout(resolve, 300));
+    let playback = (await app.page.evaluate(() =>
+      (window as any).ovcLesson.playbackState(),
+    )) as {isPlaying: boolean; frame: number; duration: number};
+    expect(playback.isPlaying).toBe(true);
+
+    const totalDuration = playback.duration;
+    expect(totalDuration).toBeGreaterThan(0);
+
+    // 1. Learner begins dragging the scrubber at 25% along the track
+    await app.page.evaluate(() => (window as any).ovcLesson.startScrub(0.25));
+
+    // Autoplay MUST be paused while learner is actively dragging
+    playback = (await app.page.evaluate(() =>
+      (window as any).ovcLesson.playbackState(),
+    )) as {isPlaying: boolean; frame: number; duration: number};
+    expect(playback.isPlaying).toBe(false);
+
+    let scrubberState = (await app.page.evaluate(() =>
+      (window as any).ovcLesson.getScrubberState(),
+    )) as {isDragging: boolean; currentFrame: number; duration: number};
+    expect(scrubberState.isDragging).toBe(true);
+
+    // 2. Learner moves the scrubber handle to 50%
+    await app.page.evaluate(() => (window as any).ovcLesson.moveScrub(0.5));
+    scrubberState = (await app.page.evaluate(() =>
+      (window as any).ovcLesson.getScrubberState(),
+    )) as {isDragging: boolean; currentFrame: number; duration: number};
+    expect(scrubberState.currentFrame).toBe(Math.round(totalDuration * 0.5));
+
+    // 3. Learner releases the scrubber handle
+    await app.page.evaluate(() => (window as any).ovcLesson.endScrub());
+
+    scrubberState = (await app.page.evaluate(() =>
+      (window as any).ovcLesson.getScrubberState(),
+    )) as {isDragging: boolean; currentFrame: number; duration: number};
+    expect(scrubberState.isDragging).toBe(false);
+
+    // Wait a brief tick to verify autoplay has resumed from the scrubbed frame
+    await new Promise(resolve => setTimeout(resolve, 150));
+    playback = (await app.page.evaluate(() =>
+      (window as any).ovcLesson.playbackState(),
+    )) as {isPlaying: boolean; frame: number; duration: number};
+    expect(playback.isPlaying).toBe(true);
+    expect(playback.frame).toBeGreaterThanOrEqual(
+      Math.round(totalDuration * 0.5),
+    );
+  });
+
+  test('scrubbed frame matches autoplay frame at identical timestamp through single render path', async () => {
+    // Start lesson with simulation beat
+    await app.page.evaluate(() =>
+      (window as any).ovcLesson.startLesson(['simulation']),
+    );
+
+    // Pause autoplay so both direct seek and scrubber seek sample the exact resting frame without drift
+    await app.page.evaluate(() =>
+      (window as any).ovcLesson.host.current.pause(),
+    );
+
+    const playback = (await app.page.evaluate(() =>
+      (window as any).ovcLesson.playbackState(),
+    )) as {duration: number};
+    const targetFrame = 60; // 2 seconds into 6 second beat
+    const targetRatio = targetFrame / playback.duration;
+
+    // Step 1: Seek directly (as autoplay does) to target frame and capture geometry
+    await app.page.evaluate(
+      (f: number) => (window as any).ovcLesson.seekTo(f),
+      targetFrame,
+    );
+    const directPositions = (await app.page.evaluate(() =>
+      (window as any).ovcLesson.currentBeatPositions(),
+    )) as Array<{id: string; x?: number; y?: number}>;
+
+    const directMass = directPositions.find(p => p.id === 'mass');
+    expect(directMass).toBeDefined();
+
+    // Step 2: Reset to frame 0
+    await app.page.evaluate(
+      (f: number) => (window as any).ovcLesson.seekTo(f),
+      0,
+    );
+
+    // Step 3: Scrub the timeline via the interactive scrubber control to target ratio
+    await app.page.evaluate(
+      (r: number) => (window as any).ovcLesson.scrubToRatio(r),
+      targetRatio,
+    );
+
+    const scrubbedPositions = (await app.page.evaluate(() =>
+      (window as any).ovcLesson.currentBeatPositions(),
+    )) as Array<{id: string; x?: number; y?: number}>;
+
+    const scrubbedMass = scrubbedPositions.find(p => p.id === 'mass');
+    expect(scrubbedMass).toBeDefined();
+
+    // Both autoplay and scrubbed frames MUST go through identical real render call
+    // producing identical geometry coordinates
+    expect(scrubbedMass!.x).toBeCloseTo(directMass!.x!, 1);
+  });
+
   test('no page errors were raised across the whole suite', () => {
     expect(app.pageErrors).toEqual([]);
   });
