@@ -455,6 +455,10 @@ export class Lesson<TPresentation = unknown> {
 
     const stageResult = await this.cookingPromise!;
     if (!stageResult.ok) {
+      // Forget the failed cook, so the next advance() stages the beat afresh
+      // instead of awaiting the same failed promise forever.
+      this.cookingIndex = -1;
+      this.cookingPromise = null;
       return {
         ok: false,
         reason: stageResult.reason,

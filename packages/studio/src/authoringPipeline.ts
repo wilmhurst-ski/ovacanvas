@@ -71,6 +71,15 @@ export interface AuthorSuccess {
   readonly intent?: unknown;
   /** The compiled CommonJS the browser resolves into a beat. */
   readonly code: string;
+  /**
+   * A lesson longer than one beat: every part compiled, in order (the first
+   * is `code`). The browser plays them straight through.
+   */
+  readonly parts?: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly code: string;
+  }[];
   readonly attempts: number;
   readonly repaired: boolean;
   readonly provider: string;
@@ -549,7 +558,7 @@ export async function authorWithRetry(
       continue;
     }
 
-    const {source, intent} = interpretation.extraction;
+    const {source, intent, parts: lessonParts} = interpretation.extraction;
     const authored = await authorBeat({
       id: '__authored__',
       title: options.topic,
@@ -581,6 +590,35 @@ export async function authorWithRetry(
         }),
     });
 
+    // A lesson's later parts are generated, not written, so they compile
+    // like the first; each is still checked rather than assumed.
+    let parts: {id: string; title: string; code: string}[] | undefined;
+    if (authored.ok && lessonParts && lessonParts.length > 1) {
+      parts = [
+        {
+          id: lessonParts[0].id,
+          title: lessonParts[0].title,
+          code: authored.code,
+        },
+      ];
+      for (const part of lessonParts.slice(1)) {
+        const compiled = await authorBeat({
+          id: part.id,
+          title: part.title,
+          source: part.source,
+          projectRoot: options.projectRoot,
+          virtualFileName: `${part.id}.ts`,
+          resolve:
+            options.resolve ?? (async (id, title) => ({id, title}) as never),
+        });
+        if (!compiled.ok) {
+          parts = undefined;
+          break;
+        }
+        parts.push({id: part.id, title: part.title, code: compiled.code});
+      }
+    }
+
     if (authored.ok) {
       log.push({
         attempt: contentAttempts,
@@ -594,6 +632,7 @@ export async function authorWithRetry(
         source,
         intent,
         code: authored.code,
+        ...(parts ? {parts} : {}),
         attempts: contentAttempts,
         repaired: authored.repaired,
         provider: spec.id,

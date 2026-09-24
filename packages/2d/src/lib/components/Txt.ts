@@ -1,4 +1,5 @@
 import {
+  BBox,
   DEFAULT,
   InterpolationFunction,
   SignalValue,
@@ -60,6 +61,19 @@ export class Txt extends Shape {
   @initial('')
   @signal()
   public declare readonly text: SimpleSignal<string, this>;
+
+  /**
+   * What the text really covers, for the audit: its laid-out lines, plus a
+   * tenth of an em each side for glyphs that overhang their advance (an
+   * italic f). The render cache pads half an em each side instead - right
+   * for not clipping a redraw, but it made every label a font-size wider
+   * than it is, so labels that did not touch were refused as colliding.
+   */
+  public auditBBox(): BBox {
+    return BBox.fromSizeCentered(this.computedSize())
+      .expand([0, this.fontSize() * 0.1])
+      .expand(this.lineWidth() / 2);
+  }
 
   protected getText(): string {
     return this.innerText();

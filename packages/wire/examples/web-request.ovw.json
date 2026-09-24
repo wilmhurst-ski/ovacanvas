@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "heading",
+      "kit": "title",
+      "text": "How a web request travels"
+    },
+    {
+      "id": "flow",
+      "kit": "graph",
+      "region": "top",
+      "layout": "flow",
+      "nodes": {
+        "user": {
+          "label": "Browser",
+          "icon": "laptop"
+        },
+        "net": {
+          "label": "Internet",
+          "icon": "globe"
+        },
+        "api": {
+          "label": "Server",
+          "icon": "server"
+        },
+        "db": {
+          "label": "Database",
+          "icon": "database"
+        }
+      },
+      "edges": ["user->net", "net->api", "api->db"]
+    },
+    {
+      "id": "facts",
+      "kit": "list",
+      "region": "bottom",
+      "items": [
+        {
+          "text": "Requests are encrypted on the way",
+          "icon": "lock"
+        },
+        {
+          "text": "The server checks who is asking",
+          "icon": "shield check"
+        },
+        {
+          "text": "Answers come back in milliseconds",
+          "icon": "timer"
+        }
+      ]
+    }
+  ],
+  "beats": [
+    {
+      "hold": 0.3
+    },
+    {
+      "show": ["facts.0", "facts.1", "facts.2"],
+      "hold": 0.6
+    }
+  ],
+  "title": "How a web request travels"
+}

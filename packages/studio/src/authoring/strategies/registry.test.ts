@@ -6,6 +6,7 @@ import {
   INTENT_COMPILER_DOMAINS,
   selectStrategy,
 } from './registry';
+import {sceneDocument} from './sceneDocument';
 
 describe('selectStrategy', () => {
   it('routes an equation-solving topic to the intent compiler, and says why', () => {
@@ -50,6 +51,21 @@ describe('the domain registry', () => {
 
   it('keeps the general path available as the floor for any topic', () => {
     expect(FALLBACK_STRATEGY.matches('literally anything')).toBe(true);
-    expect(FALLBACK_STRATEGY.id).toBe(fullCodeGen.id);
+    expect(FALLBACK_STRATEGY.id).toBe(sceneDocument.id);
+  });
+
+  it('lets the general strategy be switched to full code generation', () => {
+    expect(
+      selectStrategy('what is a derivative', 'full-code-gen').strategy.id,
+    ).toBe(fullCodeGen.id);
+    // An unknown id falls back to the default rather than failing a request.
+    expect(selectStrategy('what is a derivative', 'nope').strategy.id).toBe(
+      sceneDocument.id,
+    );
+    // An intent-compiler domain still wins over any general choice.
+    expect(
+      selectStrategy('solve 2x + 3 = 7 step by step', 'full-code-gen').strategy
+        .id,
+    ).toBe('equation-intent');
   });
 });

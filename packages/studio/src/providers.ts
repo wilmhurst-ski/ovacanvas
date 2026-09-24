@@ -52,6 +52,19 @@ export interface ProviderSpec {
    * whoever owns the account apply their own rates and be right.
    */
   readonly extractUsage?: (payload: unknown) => TokenUsage | null;
+  /**
+   * Ask for the reply as a server-sent event stream (OpenAI's `stream`).
+   *
+   * @remarks
+   * A reasoning model can think for minutes before its first word, and a
+   * plain request sends nothing back meanwhile - long enough for a gateway
+   * to drop the silent connection ("fetch failed" after about two minutes,
+   * every attempt, on exactly the topics that make a model think hardest).
+   * Streamed, the thinking arrives as it happens and the connection is
+   * never idle. The stream is gathered back into the ordinary response
+   * shape, so nothing downstream changes.
+   */
+  readonly streams?: boolean;
 }
 
 export interface TokenUsage {
@@ -119,6 +132,7 @@ export type ProviderResult = ProviderSuccess | ProviderFailure;
 /** OpenAI-compatible chat-completions shape, shared by most providers here. */
 function openAiCompatible(url: string) {
   return {
+    streams: true,
     url: () => url,
     headers: (apiKey: string) => ({
       Authorization: `Bearer ${apiKey}`,
@@ -499,13 +513,20 @@ async function sendRequest(
   fetchImpl: typeof fetch | undefined,
 ): Promise<{ok: true; payload: unknown} | ProviderFailure> {
   const doFetch = fetchImpl ?? fetch;
+  const sent = spec.streams
+    ? {
+        ...(body as Record<string, unknown>),
+        stream: true,
+        stream_options: {include_usage: true},
+      }
+    : body;
 
   let response: Response;
   try {
     response = await doFetch(spec.url(model, apiKey), {
       method: 'POST',
       headers: spec.headers(apiKey),
-      body: JSON.stringify(body),
+      body: JSON.stringify(sent),
       // A provider that never responds is indistinguishable from one that is
       // about to, unless a timeout is set - a real incident in this project's
       // history hung for four minutes with no response at all.
@@ -528,7 +549,11 @@ async function sendRequest(
 
   let payload: unknown;
   try {
-    payload = await response.json();
+    payload = (response.headers?.get('content-type') ?? '').includes(
+      'text/event-stream',
+    )
+      ? await gatherEventStream(response)
+      : await response.json();
   } catch (error) {
     return {
       ok: false,
@@ -551,6 +576,60 @@ async function sendRequest(
   }
 
   return {ok: true, payload};
+}
+
+/**
+ * An OpenAI-style event stream gathered into the plain response shape:
+ * `{choices: [{message: {content, reasoning_content}, finish_reason}], usage}`
+ * - or the stream's own `{error}` envelope, when it sends one.
+ */
+export async function gatherEventStream(response: Response): Promise<unknown> {
+  const text = await response.text();
+  let content = '';
+  let reasoning = '';
+  let finish: string | undefined;
+  let usage: unknown;
+  for (const line of text.split(/\r?\n/)) {
+    const data = line.startsWith('data:') ? line.slice(5).trim() : '';
+    if (!data || data === '[DONE]') continue;
+    let chunk: {
+      error?: unknown;
+      usage?: unknown;
+      choices?: {
+        delta?: {
+          content?: string;
+          reasoning_content?: string;
+          reasoning?: string;
+        };
+        finish_reason?: string | null;
+      }[];
+    };
+    try {
+      chunk = JSON.parse(data);
+    } catch {
+      continue;
+    }
+    if (chunk.error) return {error: chunk.error};
+    if (chunk.usage) usage = chunk.usage;
+    const choice = chunk.choices?.[0];
+    if (choice?.delta?.content) content += choice.delta.content;
+    const thought =
+      choice?.delta?.reasoning_content ?? choice?.delta?.reasoning;
+    if (thought) reasoning += thought;
+    if (choice?.finish_reason) finish = choice.finish_reason;
+  }
+  return {
+    choices: [
+      {
+        message: {
+          content,
+          ...(reasoning ? {reasoning_content: reasoning} : {}),
+        },
+        ...(finish ? {finish_reason: finish} : {}),
+      },
+    ],
+    ...(usage ? {usage} : {}),
+  };
 }
 
 function toResult(payload: unknown, spec: ProviderSpec): ProviderResult {

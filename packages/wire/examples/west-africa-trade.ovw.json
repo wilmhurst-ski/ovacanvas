@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "title": "West Africa's coastal trade corridor",
+  "nodes": [
+    {
+      "id": "heading",
+      "kit": "title",
+      "text": "The Abidjan-Lagos corridor"
+    },
+    {
+      "id": "map",
+      "kit": "map",
+      "highlight": ["Côte d'Ivoire", "Ghana", "Togo", "Benin", "Nigeria"],
+      "markers": ["Abidjan", "Accra", "Lomé", "Cotonou", "Lagos"],
+      "routes": ["Abidjan->Accra->Lomé->Cotonou->Lagos"]
+    }
+  ],
+  "beats": [
+    {
+      "hold": 0.4
+    },
+    {
+      "trace": "map.Abidjan->Accra->Lomé->Cotonou->Lagos",
+      "pace": "slow",
+      "hold": 0.6
+    },
+    {
+      "highlight": "map.Nigeria",
+      "hold": 1
+    }
+  ]
+}

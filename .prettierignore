@@ -10,3 +10,6 @@ CHANGELOG.md
 /packages/*/lib
 /packages/*/static
 /packages/*/build
+
+# Generated from the engine declarations
+packages/wire/src/catalogue/generated.ts

@@ -14,7 +14,8 @@
   "dependencies": {
     "@ovacanvas/2d": "*",
     "@ovacanvas/core": "*",
-    "@ovacanvas/host": "*"
+    "@ovacanvas/host": "*",
+    "@ovacanvas/wire": "*"
   },
   "devDependencies": {
     "typescript": "^5.2.2",

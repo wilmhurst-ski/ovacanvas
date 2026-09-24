@@ -167,9 +167,9 @@ function formatLinear(
   }
   if (constant !== 0 || parts.length === 0) {
     const magnitude = formatNumber(Math.abs(constant));
-    if (parts.length === 0)
-      {parts.push(constant < 0 ? `-${magnitude}` : magnitude);}
-    else parts.push(constant < 0 ? `- ${magnitude}` : `+ ${magnitude}`);
+    if (parts.length === 0) {
+      parts.push(constant < 0 ? `-${magnitude}` : magnitude);
+    } else parts.push(constant < 0 ? `- ${magnitude}` : `+ ${magnitude}`);
   }
 
   return parts.join(' ');

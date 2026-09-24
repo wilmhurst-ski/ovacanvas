@@ -5,10 +5,9 @@
  * Usage: `npm run studio:dev` in one terminal, then `npm run verify:live`.
  *
  * These checks were being run by hand, one at a time, in an order that lived
- * only in someone's head - and the order matters, because the corpus run
- * produces the stored run that the replay consumes. Collecting them here is
- * not tidiness: it is the difference between a verification that happens and
- * one that is remembered to happen.
+ * only in someone's head. Collecting them here is not tidiness: it is the
+ * difference between a verification that happens and one that is remembered
+ * to happen.
  *
  * Deliberately requires the dev server rather than starting one. A script that
  * spawns and reaps a server is a script that leaves one running when it is
@@ -72,27 +71,17 @@ if (!health.hasKey) {
 
 const results = [];
 
-// 1. The corpus. This also writes the stored run that step 2 replays, which is
-//    why the order is fixed rather than a set of independent checks.
+// 1. The corpus: authoring reliability against the live provider.
 results.push([
-  'corpus (authoring reliability, and a stored run for the replay)',
+  'corpus (authoring reliability)',
   run('CORPUS', process.execPath, [path.join(repoRoot, 'tools', 'run-corpus.mjs')]),
 ]);
 
-// 2. Replay the run that step 1 just stored, through the real gate, with no
-//    provider. This is the half that used to be untestable without re-asking
-//    the model.
-results.push([
-  'corpus replay (stored beats through the real gate, offline)',
-  run(
-    'CORPUS REPLAY',
-    process.execPath,
-    [vitest, 'run', 'src/corpusReplay.test.ts'],
-    {cwd: path.join(repoRoot, 'packages', 'e2e')},
-  ),
-]);
+// (The offline corpus replay lived in packages/e2e, which was removed with the
+//    editor toolchain. packages/wire's PreviewRenderer is the offline path through
+//    the real gate now: see packages/wire/src/node/preview.test.ts.)
 
-// 3. A non-math question, end to end, in a real browser. The MVP bar's first
+    // 2. A non-math question, end to end, in a real browser. The MVP bar's first
 //    bullet: a learner can ask something outside maths and see it explained.
 results.push([
   `live beat (non-math: "${NON_MATH_QUESTION}")`,

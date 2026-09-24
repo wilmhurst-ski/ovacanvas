@@ -12,6 +12,12 @@ import type {BBox, PossibleMatrix2D, Vector2} from '@ovacanvas/core';
 export interface AuditableNode {
   readonly key: string;
   cacheBBox(): BBox;
+  /**
+   * The region the node really covers, when that is tighter than its
+   * render cache (text pads its cache by half an em each side for glyph
+   * overhang). Local space, like {@link cacheBBox}.
+   */
+  auditBBox?(): BBox;
   localContentBBox(): BBox;
   localToWorld(): PossibleMatrix2D;
   absoluteOpacity(): number;
@@ -95,6 +101,14 @@ export interface AuditItem {
   readonly mayTouch?: MayTouch;
   /** Defaults to `node.absoluteOpacity() > threshold` when omitted. */
   readonly isVisible?: () => boolean;
+  /**
+   * The node's position is load-bearing - authored geometry (a figure's
+   * vertex) or derived from other nodes (a connector bound to its
+   * endpoints, a label anchored to its target) - so mechanical repair must
+   * never move it. It still counts as an obstacle: repair moves whatever it
+   * collides with instead.
+   */
+  readonly fixed?: boolean;
 }
 
 export interface RouteItem {

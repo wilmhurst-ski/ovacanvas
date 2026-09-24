@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "title": "Great-circle flights look curved on a map",
+  "nodes": [
+    {
+      "id": "heading",
+      "kit": "title",
+      "text": "The shortest path is a great circle"
+    },
+    {
+      "id": "globe",
+      "kit": "map",
+      "view": "globe",
+      "region": "left",
+      "focus": ["London", "New York"],
+      "markers": ["London", "New York"],
+      "routes": ["London->New York"]
+    },
+    {
+      "id": "flat",
+      "kit": "map",
+      "region": "right",
+      "focus": "North America",
+      "highlight": {"USA": "coral", "Canada": "blue"},
+      "labels": false
+    }
+  ],
+  "beats": [
+    {"hold": 0.3},
+    {"trace": "globe.London->New York", "hold": 0.6},
+    {"show": "flat.Mexico", "hold": 0.8}
+  ]
+}

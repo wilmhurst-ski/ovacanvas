@@ -216,8 +216,9 @@ export function solveRationalEquation(question: string): SolvedEquation | null {
   const roots = rootsOf(solved);
   if (roots.length === 0) return null;
   for (const root of roots) {
-    if (evaluate(left.d, root) === 0 || evaluate(right.d, root) === 0)
-      {return null;}
+    if (evaluate(left.d, root) === 0 || evaluate(right.d, root) === 0) {
+      return null;
+    }
   }
 
   const cleared = `${formatPoly(leftProduct, variable)} = ${formatPoly(rightProduct, variable)}`;

@@ -111,8 +111,9 @@ function formatQuadratic({a, b, c}: Quadratic, variable: string): string {
  */
 function parseQuadraticSide(side: string, variable: string): Quadratic | null {
   if (side === '') return null;
-  if (/[\^]/.test(side.replace(new RegExp(`\\${variable}\\^2`, 'g'), '')))
-    {return null;}
+  if (/[\^]/.test(side.replace(new RegExp(`\\${variable}\\^2`, 'g'), ''))) {
+    return null;
+  }
   if (/[()[\]{}/]/.test(side)) return null;
 
   const letters = side.replace(/[^a-z]/gi, '');

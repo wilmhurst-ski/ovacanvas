@@ -15,9 +15,12 @@
  * is for: it needs the compiler and the filesystem, so it cannot run in a
  * browser at all.
  *
- * Only `.js` output is touched. The `.d.ts` files are left alone because
- * TypeScript resolves extensionless specifiers under the `node` module
- * resolution every consumer of this package already uses.
+ * The `.d.ts` files get the same treatment. Extensionless specifiers resolve
+ * under the `node` module resolution the studio uses, but not under
+ * `nodenext`, where a type-only consumer (`@ovacanvas/wire`) otherwise sees
+ * `@ovacanvas/host/authoring` as exporting nothing. A `.js` specifier
+ * resolves to its `.d.ts` under every resolution mode, so this is safe for
+ * both.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -48,7 +51,7 @@ function walk(directory) {
   for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
     const full = path.join(directory, entry.name);
     if (entry.isDirectory()) walk(full);
-    else if (entry.name.endsWith('.js')) rewrite(full);
+    else if (entry.name.endsWith('.js') || entry.name.endsWith('.d.ts')) rewrite(full);
   }
 }
 

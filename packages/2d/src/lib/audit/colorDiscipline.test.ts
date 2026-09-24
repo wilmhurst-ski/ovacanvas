@@ -40,6 +40,19 @@ describe('collectColorOveruse', () => {
     expect(collectColorOveruse(root)).toHaveLength(0);
   });
 
+  it('counts a highlight handing over mid-fade as one accent, the real live-model case', () => {
+    // One list item fading from blue back to ink while the next fades in:
+    // frame 45 of a real lesson read #2b61c4, #3066ca and #171e2b.
+    const out = new StubAuditNode('out', {text: 'slice x', fill: '#2b61c4'});
+    const into = new StubAuditNode('into', {text: 'slice y', fill: '#3066ca'});
+    const ink = new StubAuditNode('ink', {text: 'note', fill: '#171e2b'});
+    const accent = new StubAuditNode('accent', {tex: 'c', fill: '#F05A3C'});
+    const root = new StubAuditNode('root', {
+      children: [out, into, ink, accent],
+    });
+    expect(collectColorOveruse(root)).toHaveLength(0);
+  });
+
   it('flags the exact real failure: every text given its own color instead of black', () => {
     const a = new StubAuditNode('labelA', {text: 'a = 3', fill: '#2F66D0'});
     const b = new StubAuditNode('labelB', {text: 'b = 4', fill: '#F05A3C'});

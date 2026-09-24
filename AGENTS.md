@@ -6,6 +6,12 @@ mandatory for any agent working here. They are not style preferences.
 
 If a rule blocks you, **stop and ask**. Do not work around it.
 
+**Authoring beats.** Beats are authored as scene documents through
+`packages/wire` (its MCP server, or the studio's `scene-document` strategy),
+not as hand-written beat modules. After changing any `@ovacanvas/2d` or
+`@ovacanvas/core` public type, rebuild the engine and run
+`npm run wire:catalogue`; the catalogue test fails until you do.
+
 ---
 
 ## 1. The one-line test

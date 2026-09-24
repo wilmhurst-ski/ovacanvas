@@ -16,8 +16,9 @@ const SHORT_EQUATION =
   /\b[a-zA-Z]\w{0,3}\s*=\s*[a-zA-Z0-9][a-zA-Z0-9+\-*/^.]*\b/;
 
 function looksLikeMathNotation(text: string): string | null {
-  if (LATEX_COMMAND_LEAK.test(text))
-    {return 'looks like un-rendered LaTeX command syntax';}
+  if (LATEX_COMMAND_LEAK.test(text)) {
+    return 'looks like un-rendered LaTeX command syntax';
+  }
   if (INEQUALITY_CHAIN.test(text)) return 'looks like an inequality chain';
   if (CARET_EXPONENT.test(text)) return 'looks like caret-exponent notation';
   if (SHORT_EQUATION.test(text)) return 'looks like an algebraic equation';

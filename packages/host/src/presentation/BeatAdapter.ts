@@ -7,6 +7,7 @@ import {
   type AuditItem,
   type AuditReport,
 } from '@ovacanvas/2d/lib/audit';
+import {loadEngineFonts} from '@ovacanvas/2d/lib/theme/fonts';
 import type {
   PreparationContext,
   PresentationAdapter,
@@ -75,6 +76,12 @@ export class BeatAdapter
 {
   /** The most recent audit report per generation, for callers to inspect a refusal. */
   public readonly lastReport = new Map<number, AuditReport>();
+  /**
+   * Each generation's first audit, before any mechanical repair ran. When a
+   * beat is refused this is what explains it: the final report describes
+   * the scene after repair has already moved things.
+   */
+  public readonly initialReport = new Map<number, AuditReport>();
 
   public readonly transitionDriver: TransitionDriver;
   private readonly onTransitionComplete?: (
@@ -108,6 +115,9 @@ export class BeatAdapter
         validateChoreographyPlan(request.beat.choreographyPlan);
       }
 
+      // Text lays out against the engine's own font, on every machine -
+      // so it must be able to draw before the scene is built.
+      await loadEngineFonts();
       presentation = new BeatPresentation(request.beat);
       presentation.capability = context.capability;
 
@@ -186,6 +196,7 @@ export class BeatAdapter
       });
       report = withDurationFinding(report, presentation);
       this.lastReport.set(context.generation, report);
+      this.initialReport.set(context.generation, report);
 
       // A re-authoring round trip is a real LLM call (seconds); nudging a
       // node apart from a neighbor plus one re-render is local

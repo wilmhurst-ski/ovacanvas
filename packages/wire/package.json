@@ -1,0 +1,53 @@
+{
+  "name": "@ovacanvas/wire",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "ManimWire-style authoring for OvaCanvas: an introspected component catalogue, a typed scene document, a validator with located issues, deterministic code generation, and an MCP server",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": "./lib/index.js",
+    "./node": "./lib/node/index.js"
+  },
+  "bin": {
+    "ovacanvas-wire-mcp": "./lib/mcp/cli.js"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json -w",
+    "catalogue": "node scripts/extract-catalogue.mjs",
+    "mcp": "node lib/mcp/cli.js",
+    "test": "vitest run"
+  },
+  "sideEffects": false,
+  "files": [
+    "lib",
+    "preview",
+    "data"
+  ],
+  "dependencies": {
+    "@dagrejs/dagre": "3.1.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@ovacanvas/2d": "*",
+    "@ovacanvas/core": "*",
+    "@ovacanvas/host": "*",
+    "@types/chroma-js": "2.4.4",
+    "@types/fontkit": "^2.0.9",
+    "@types/topojson-client": "^3.1.5",
+    "@types/topojson-specification": "^1.0.5",
+    "chroma-js": "2.4.2",
+    "d3-geo": "3.1.1",
+    "fontkit": "^2.0.4",
+    "playwright": "1.46.1",
+    "topojson-client": "^3.1.0",
+    "typescript": "^5.2.2",
+    "vite": "^4.5.0",
+    "world-atlas": "^2.0.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "vitest": "^0.34.6",
+    "wawoff2": "^2.0.1"
+  }
+}

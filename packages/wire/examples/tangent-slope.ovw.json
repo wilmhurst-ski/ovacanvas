@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "title": "The derivative is the slope of the tangent",
+  "nodes": [
+    {"id": "heading", "kit": "title", "text": "The slope of the tangent"},
+    {
+      "id": "graph",
+      "kit": "plot",
+      "region": "left",
+      "x": [-2.5, 2.5],
+      "y": [-1, 6],
+      "functions": {"f": {"expr": "x^2", "label": "f(x) = x^2"}},
+      "points": {"P": {"on": "f", "x": 1}},
+      "tangents": [{"of": "f", "at": 1}]
+    },
+    {
+      "id": "steps",
+      "kit": "derivation",
+      "region": "right",
+      "steps": [
+        {"tex": "f(x) = x^2"},
+        {"tex": "f'(x) = 2x", "why": "\\text{power rule}"},
+        {"tex": "f'(1) = 2", "why": "\\text{slope of the tangent at } P"}
+      ]
+    }
+  ],
+  "beats": [
+    {"trace": "graph.f", "pace": "slow"},
+    {"show": "steps.1"},
+    {"trace": "graph.tangent0", "show": "steps.2", "hold": 1}
+  ]
+}

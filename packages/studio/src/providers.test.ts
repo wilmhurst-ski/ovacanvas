@@ -431,3 +431,51 @@ describe('resolveProviderKeys and KeyRotator', () => {
     expect(attemptedKeys).toEqual(['rate-limited-key', 'healthy-key']);
   });
 });
+
+describe('streamed replies', () => {
+  it('asks an OpenAI-compatible provider to stream and gathers the reply', async () => {
+    let sent: Record<string, unknown> = {};
+    const events = [
+      {choices: [{delta: {reasoning_content: 'thinking '}}]},
+      {choices: [{delta: {reasoning_content: 'hard'}}]},
+      {choices: [{delta: {content: '{"version"'}}]},
+      {choices: [{delta: {content: ': 1}'}, finish_reason: 'stop'}]},
+      {choices: [], usage: {prompt_tokens: 900, completion_tokens: 40}},
+    ];
+    const body =
+      events.map(e => `data: ${JSON.stringify(e)}\n\n`).join('') +
+      'data: [DONE]\n\n';
+    const result = await complete(PROVIDERS.apmix, 'k', {
+      model: 'm',
+      system: 's',
+      user: 'u',
+      fetchImpl: (async (_url: string, init: RequestInit) => {
+        sent = JSON.parse(String(init.body));
+        return new Response(body, {
+          status: 200,
+          headers: {'content-type': 'text/event-stream'},
+        });
+      }) as unknown as typeof fetch,
+    });
+    expect(sent.stream).toBe(true);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.text).toBe('{"version": 1}');
+      expect(result.usage).toEqual({promptTokens: 900, completionTokens: 40});
+    }
+  });
+
+  it('reports an error sent inside the stream', async () => {
+    const result = await complete(PROVIDERS.apmix, 'k', {
+      model: 'm',
+      system: 's',
+      user: 'u',
+      fetchImpl: (async () =>
+        new Response(
+          `data: ${JSON.stringify({error: {message: 'upstream overloaded'}})}\n\n`,
+          {status: 200, headers: {'content-type': 'text/event-stream'}},
+        )) as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+  });
+});

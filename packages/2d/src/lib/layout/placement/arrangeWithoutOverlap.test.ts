@@ -24,6 +24,28 @@ function overlaps(
 }
 
 describe('arrangeWithoutOverlap', () => {
+  it('never moves a pinned item, and pushes the free one clear of it', () => {
+    const pinned: PlacementItem = {
+      id: 'pin',
+      x: 0,
+      y: 0,
+      width: 40,
+      height: 40,
+      fixed: true,
+    };
+    const free: PlacementItem = {
+      id: 'free',
+      x: 10,
+      y: 0,
+      width: 40,
+      height: 40,
+    };
+    const [a, b] = arrangeWithoutOverlap([pinned, free]);
+    expect(a).toEqual({id: 'pin', x: 0, y: 0});
+    expect(overlaps(pinned, free, a.x, a.y, b.x, b.y)).toBe(false);
+    expect(b.x).toBeGreaterThan(10);
+  });
+
   it('returns an empty array for no items', () => {
     expect(arrangeWithoutOverlap([])).toEqual([]);
   });

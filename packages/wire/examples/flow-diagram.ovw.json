@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "title": "Photosynthesis inputs and outputs",
+  "nodes": [
+    {
+      "id": "heading",
+      "component": "Txt",
+      "role": "title",
+      "props": {"text": "Photosynthesis", "position": [0, -390]}
+    },
+    {
+      "id": "leaf",
+      "component": "Rect",
+      "props": {
+        "size": [360, 200],
+        "radius": 24,
+        "fill": {"theme": "green"},
+        "position": [0, 20]
+      }
+    },
+    {
+      "id": "leafLabel",
+      "component": "Txt",
+      "parent": "leaf",
+      "props": {"text": "Leaf", "fontSize": 40, "fill": {"theme": "paper"}}
+    },
+    {
+      "id": "sun",
+      "component": "Circle",
+      "props": {
+        "size": 150,
+        "fill": {"theme": "yellow"},
+        "position": [-560, 20]
+      }
+    },
+    {
+      "id": "sunLabel",
+      "component": "AnchoredLabel",
+      "props": {
+        "anchor": {"ref": "sun"},
+        "origin": "Bottom",
+        "distance": 40,
+        "text": "light",
+        "fontSize": 28
+      }
+    },
+    {
+      "id": "sugar",
+      "component": "Rect",
+      "props": {
+        "size": [220, 120],
+        "radius": 16,
+        "stroke": {"theme": "ink"},
+        "lineWidth": 3,
+        "position": [560, 20]
+      }
+    },
+    {
+      "id": "sugarLabel",
+      "component": "Txt",
+      "parent": "sugar",
+      "props": {"text": "sugar", "fontSize": 32}
+    },
+    {
+      "id": "inArrow",
+      "component": "Line",
+      "props": {
+        "points": [
+          {"ref": "sun", "side": "right"},
+          {"ref": "leaf", "side": "left"}
+        ],
+        "stroke": {"theme": "ink"},
+        "lineWidth": 4,
+        "endArrow": true,
+        "end": 0
+      }
+    },
+    {
+      "id": "outArrow",
+      "component": "Line",
+      "props": {
+        "points": [
+          {"ref": "leaf", "side": "right"},
+          {"ref": "sugar", "side": "left"}
+        ],
+        "stroke": {"theme": "ink"},
+        "lineWidth": 4,
+        "endArrow": true,
+        "end": 0
+      }
+    }
+  ],
+  "timeline": [
+    {"kind": "wait", "seconds": 0.4},
+    {
+      "kind": "tween",
+      "node": "inArrow",
+      "prop": "end",
+      "to": 1,
+      "seconds": 0.8
+    },
+    {
+      "kind": "tween",
+      "node": "outArrow",
+      "prop": "end",
+      "to": 1,
+      "seconds": 0.8
+    },
+    {
+      "kind": "all",
+      "steps": [
+        {
+          "kind": "tween",
+          "node": "sugar",
+          "prop": "fill",
+          "to": {"theme": "yellow"},
+          "seconds": 0.6
+        },
+        {
+          "kind": "tween",
+          "node": "leaf",
+          "prop": "lineWidth",
+          "to": 6,
+          "seconds": 0.6
+        }
+      ]
+    },
+    {"kind": "wait", "seconds": 0.8}
+  ]
+}

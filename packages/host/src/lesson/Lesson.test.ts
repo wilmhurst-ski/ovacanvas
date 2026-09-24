@@ -449,3 +449,36 @@ describe('Lesson exploration-vs-commit interruption semantics', () => {
     expect(adv.reason).toBe('exploring');
   });
 });
+
+describe('Lesson recovery', () => {
+  it('stages a beat afresh on the next advance after its cook failed', async () => {
+    const adapter = new ControllableFakeAdapter();
+    let failures = 1;
+    const prepare = adapter.prepare.bind(adapter);
+    adapter.prepare = (context, req) => {
+      if (req.beat.id === 'b1' && failures > 0) {
+        failures--;
+        return Promise.reject(new Error('flaky cook'));
+      }
+      return prepare(context, req);
+    };
+    const store = new LessonStore('recovery', 'Recovery');
+    const owner = new TransitionOwner<
+      LessonState,
+      FakePresentation,
+      ChunkRequest
+    >({authority: store.authority, adapter});
+    const lesson = new Lesson({
+      store,
+      owner,
+      beats: [createFakeBeat('b0'), createFakeBeat('b1')],
+    });
+    await lesson.start();
+    const first = await lesson.advance();
+    expect(first.ok).toBe(false);
+    expect(lesson.isCooking).toBe(false);
+    const second = await lesson.advance();
+    expect(second.ok).toBe(true);
+    expect(lesson.currentBeat?.id).toBe('b1');
+  });
+});

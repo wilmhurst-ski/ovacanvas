@@ -42,6 +42,15 @@ export interface StrategyExtraction {
   readonly intent?: unknown;
   /** A complete beat module source, ready for the compiler. */
   readonly source: string;
+  /**
+   * A lesson longer than one beat: every part's module source, in order.
+   * The first is `source`; each later one starts where the last ended.
+   */
+  readonly parts?: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly source: string;
+  }[];
 }
 
 export type StrategyInterpretation =

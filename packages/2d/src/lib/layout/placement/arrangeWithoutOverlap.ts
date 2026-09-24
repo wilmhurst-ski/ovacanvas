@@ -8,6 +8,11 @@ export interface PlacementItem {
   readonly y: number;
   readonly width: number;
   readonly height: number;
+  /**
+   * Pinned at its desired position: it pushes other items away but never
+   * moves itself.
+   */
+  readonly fixed?: boolean;
 }
 
 export interface PlacementResult {
@@ -33,6 +38,7 @@ interface ArrangeNode extends RectNodeDatum {
   readonly id: string;
   readonly anchorX: number;
   readonly anchorY: number;
+  readonly fixed: boolean;
 }
 
 /**
@@ -80,6 +86,7 @@ export function arrangeWithoutOverlap(
     height: item.height,
     anchorX: item.x,
     anchorY: item.y,
+    fixed: item.fixed === true,
   }));
 
   const collide = forceRectCollide<ArrangeNode>(collideStrength);
@@ -91,6 +98,16 @@ export function arrangeWithoutOverlap(
     alpha += (0 - alpha) * alphaDecay;
     for (const force of forces) force(alpha);
     for (const node of nodes) {
+      if (node.fixed) {
+        // A pinned rect only ever pushes: the collide force's share of the
+        // separation it would have taken is discarded, so the free rect
+        // keeps being pushed until the pair is clear.
+        node.x = node.anchorX;
+        node.y = node.anchorY;
+        node.vx = 0;
+        node.vy = 0;
+        continue;
+      }
       node.x! += node.vx! *= velocityDecay;
       node.y! += node.vy! *= velocityDecay;
     }

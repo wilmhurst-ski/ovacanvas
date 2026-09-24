@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "title": "A thrown ball follows a parabola",
+  "nodes": [
+    {
+      "id": "heading",
+      "kit": "title",
+      "text": "A thrown ball follows a parabola"
+    },
+    {
+      "id": "throw",
+      "kit": "motion",
+      "kind": "projectile",
+      "speed": 18,
+      "angle": 55,
+      "region": "left",
+      "seconds": 2.4
+    },
+    {
+      "id": "why",
+      "kit": "list",
+      "region": "right",
+      "items": [
+        {
+          "text": "Sideways speed stays the same",
+          "detail": "nothing pushes it sideways"
+        },
+        {"text": "Gravity slows the rise, then speeds the fall"},
+        {"text": "Together they trace a parabola"}
+      ]
+    }
+  ],
+  "beats": [
+    {"hold": 0.3},
+    {"play": "throw", "hold": 0.4},
+    {"show": "why.2", "hold": 1}
+  ]
+}

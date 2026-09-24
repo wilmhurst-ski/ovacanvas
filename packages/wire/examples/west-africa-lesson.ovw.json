@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "title": "Why West Africa's coast is one market",
+  "scenes": [
+    {
+      "nodes": [
+        {
+          "id": "heading",
+          "kit": "title",
+          "text": "Five countries, one coastline"
+        },
+        {
+          "id": "map",
+          "kit": "map",
+          "highlight": ["Côte d'Ivoire", "Ghana", "Togo", "Benin", "Nigeria"],
+          "markers": ["Abidjan", "Accra", "Lomé", "Cotonou", "Lagos"],
+          "routes": ["Abidjan->Accra->Lomé->Cotonou->Lagos"]
+        }
+      ],
+      "beats": [
+        {"hold": 0.6},
+        {"highlight": "map.Côte d'Ivoire", "hold": 0.5},
+        {"highlight": "map.Ghana", "hold": 0.5},
+        {"highlight": "map.Togo", "hold": 0.5},
+        {"highlight": "map.Benin", "hold": 0.5},
+        {"highlight": "map.Nigeria", "hold": 0.6},
+        {
+          "trace": "map.Abidjan->Accra->Lomé->Cotonou->Lagos",
+          "pace": "slow",
+          "hold": 0.8
+        },
+        {"highlight": "map.Lagos", "hold": 1}
+      ]
+    },
+    {
+      "keep": ["heading"],
+      "nodes": [
+        {
+          "id": "globe",
+          "kit": "map",
+          "view": "globe",
+          "region": "left",
+          "focus": "West Africa",
+          "highlight": {"West Africa": "green"},
+          "labels": false
+        },
+        {
+          "id": "why",
+          "kit": "list",
+          "region": "right",
+          "items": [
+            {"text": "One coastal highway links five capitals"},
+            {"text": "Ports face the same Atlantic trade routes"},
+            {"text": "ECOWAS lets goods cross borders freely"}
+          ]
+        }
+      ],
+      "beats": [
+        {"hold": 0.4},
+        {"show": "why.0", "hold": 0.8},
+        {"show": "why.1", "hold": 0.8},
+        {"show": "why.2", "hold": 1.2}
+      ]
+    }
+  ]
+}

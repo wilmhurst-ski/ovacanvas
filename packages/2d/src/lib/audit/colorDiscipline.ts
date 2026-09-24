@@ -42,6 +42,62 @@ function resolvedHex(node: AuditableNode): string | null {
   return value.hex().toLowerCase();
 }
 
+function rgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)) as [
+    number,
+    number,
+    number,
+  ];
+}
+
+/**
+ * The colour a text's fill stands for. A highlight fading in or out passes
+ * through mixes of ink and its accent (`#2b61c4`, `#3066ca` on the way to
+ * blue); each of those is the same deliberate accent, not a new colour, so a
+ * fill lying on the line between a neutral and an accent counts as that
+ * accent - or as neutral when it is still mostly ink. Anything else counts
+ * as itself.
+ */
+function colourFamily(
+  hex: string,
+  neutrals: readonly string[],
+  accents: readonly string[],
+): string | null {
+  const c = rgb(hex);
+  let best: {family: string | null; distance: number} = {
+    family: hex,
+    distance: 18,
+  };
+  for (const n of neutrals) {
+    const a0 = rgb(n);
+    for (const accent of accents) {
+      const a1 = rgb(accent);
+      const d = [a1[0] - a0[0], a1[1] - a0[1], a1[2] - a0[2]];
+      const len = d[0] * d[0] + d[1] * d[1] + d[2] * d[2] || 1;
+      const t = Math.max(
+        0,
+        Math.min(
+          1,
+          ((c[0] - a0[0]) * d[0] +
+            (c[1] - a0[1]) * d[1] +
+            (c[2] - a0[2]) * d[2]) /
+            len,
+        ),
+      );
+      const distance = Math.hypot(
+        c[0] - (a0[0] + d[0] * t),
+        c[1] - (a0[1] + d[1] * t),
+        c[2] - (a0[2] + d[2] * t),
+      );
+      if (distance < best.distance) {
+        best = {family: t < 0.2 ? null : accent, distance};
+      }
+    }
+  }
+  return best.family;
+}
+
 /**
  * Refuse a beat that gave its text/Latex more distinct accent colors than
  * the theme allows - the engine-enforced half of "black for text and Latex
@@ -76,6 +132,14 @@ export function collectColorOveruse(
     theme().ink.toLowerCase(),
     theme().secondaryInk.toLowerCase(),
   ]);
+  const accents = [
+    theme().blue,
+    theme().cyan,
+    theme().coral,
+    theme().yellow,
+    theme().green,
+    theme().magenta,
+  ].map(c => c.toLowerCase());
 
   const hits: ColorHit[] = [];
 
@@ -96,7 +160,11 @@ export function collectColorOveruse(
 
   for (const child of root.children()) visit(child);
 
-  const distinctColors = new Set(hits.map(hit => hit.hex));
+  const distinctColors = new Set(
+    hits
+      .map(hit => colourFamily(hit.hex, [...neutral], accents))
+      .filter((family): family is string => family !== null),
+  );
   if (distinctColors.size <= maxAccentColors) return [];
 
   return [

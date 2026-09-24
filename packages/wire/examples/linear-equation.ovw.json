@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "title": "Solving 2x + 3 = 11",
+  "nodes": [
+    {
+      "id": "title",
+      "component": "Txt",
+      "role": "title",
+      "props": {"text": "Solve for x", "position": [0, -380]}
+    },
+    {
+      "id": "equation",
+      "component": "Latex",
+      "props": {"tex": "2x + 3 = 11", "fontSize": 72, "position": [0, -40]}
+    },
+    {
+      "id": "note",
+      "component": "AnchoredLabel",
+      "props": {
+        "anchor": {"ref": "equation"},
+        "origin": "Bottom",
+        "distance": 110,
+        "text": "subtract 3 from both sides",
+        "fontSize": 30,
+        "fill": {"theme": "secondaryInk"},
+        "opacity": 0
+      }
+    }
+  ],
+  "timeline": [
+    {"kind": "wait", "seconds": 0.6},
+    {
+      "kind": "tween",
+      "node": "note",
+      "prop": "opacity",
+      "to": 1,
+      "seconds": 0.3
+    },
+    {
+      "kind": "tween",
+      "node": "equation",
+      "prop": "tex",
+      "to": "2x = 8",
+      "seconds": 1.0,
+      "easing": "easeInOutCubic"
+    },
+    {
+      "kind": "set",
+      "node": "note",
+      "prop": "text",
+      "value": "divide both sides by 2"
+    },
+    {"kind": "wait", "seconds": 0.5},
+    {
+      "kind": "tween",
+      "node": "equation",
+      "prop": "tex",
+      "to": "x = 4",
+      "seconds": 1.0
+    },
+    {"kind": "wait", "seconds": 0.6}
+  ]
+}

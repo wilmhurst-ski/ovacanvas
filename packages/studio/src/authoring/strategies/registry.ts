@@ -1,5 +1,6 @@
 import {equationIntent} from './equationIntent/strategy';
 import {fullCodeGen} from './fullCodeGen';
+import {sceneDocument, sceneDocumentPlain} from './sceneDocument';
 import type {AuthoringStrategy} from './types';
 
 /**
@@ -86,14 +87,32 @@ export const INTENT_COMPILER_DOMAINS: readonly IntentCompilerDomain[] = [
 ];
 
 /**
- * What every topic without a fitting domain uses.
+ * The general strategies: any topic, any catalogue component.
  *
  * @remarks
- * Not a degraded path - it is the general one, and the only strategy that can
- * serve a domain the engine has no purpose-built primitive for. It is the
- * floor this product stands on, not a consolation prize.
+ * `scene-document` is the default. It is as general as full code generation
+ * (both reach every component the engine exports) but the model writes a
+ * validated JSON document instead of code, so the failure classes recorded
+ * against full code-gen - invented props and exports, positional constructor
+ * arguments, `number[]` coordinates, missing or one-sided `mayTouch`,
+ * unregistered nodes - cannot occur. `full-code-gen` stays selectable with
+ * `OVACANVAS_STRATEGY=full-code-gen` so the two can be measured side by side.
  */
-export const FALLBACK_STRATEGY: AuthoringStrategy = fullCodeGen;
+export const GENERAL_STRATEGIES: Readonly<Record<string, AuthoringStrategy>> = {
+  [sceneDocument.id]: sceneDocument,
+  [sceneDocumentPlain.id]: sceneDocumentPlain,
+  [fullCodeGen.id]: fullCodeGen,
+};
+
+/**
+ * What every topic without a fitting domain uses by default.
+ *
+ * @remarks
+ * Not a degraded path - it is the general one, and the only kind of strategy
+ * that can serve a domain the engine has no purpose-built primitive for. It is
+ * the floor this product stands on, not a consolation prize.
+ */
+export const FALLBACK_STRATEGY: AuthoringStrategy = sceneDocument;
 
 export interface StrategySelection {
   readonly strategy: AuthoringStrategy;
@@ -101,7 +120,14 @@ export interface StrategySelection {
   readonly reason: string;
 }
 
-export function selectStrategy(topic: string): StrategySelection {
+/**
+ * @param general - id of the general strategy to fall back to (e.g. from
+ * `OVACANVAS_STRATEGY`); unknown or omitted means `FALLBACK_STRATEGY`.
+ */
+export function selectStrategy(
+  topic: string,
+  general?: string,
+): StrategySelection {
   for (const domain of INTENT_COMPILER_DOMAINS) {
     if (domain.strategy.matches(topic)) {
       return {
@@ -110,9 +136,10 @@ export function selectStrategy(topic: string): StrategySelection {
       };
     }
   }
+  const fallback =
+    (general && GENERAL_STRATEGIES[general]) || FALLBACK_STRATEGY;
   return {
-    strategy: FALLBACK_STRATEGY,
-    reason:
-      'no intent-compiler domain fits this topic, so the general code-generation path is used',
+    strategy: fallback,
+    reason: `no intent-compiler domain fits this topic, so the general path is used (${fallback.id}: ${fallback.description})`,
   };
 }

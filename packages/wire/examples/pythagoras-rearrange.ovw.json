@@ -1,0 +1,181 @@
+{
+  "version": 1,
+  "title": "Pythagoras by rearrangement",
+  "nodes": [
+    {
+      "id": "heading",
+      "kit": "title",
+      "text": "Why a² + b² = c²"
+    },
+    {
+      "id": "proof",
+      "kit": "pieces",
+      "box": [0, 200, 1600, 480],
+      "params": {
+        "a": 2,
+        "b": 1
+      },
+      "layouts": {
+        "one": {
+          "T1": [
+            [0, 0],
+            ["a", 0],
+            [0, "b"]
+          ]
+        },
+        "square": {
+          "T1": [
+            [0, 0],
+            ["a", 0],
+            [0, "b"]
+          ],
+          "T2": [
+            ["a", 0],
+            ["a+b", 0],
+            ["a+b", "a"]
+          ],
+          "T3": [
+            ["a+b", "a"],
+            ["a+b", "a+b"],
+            ["b", "a+b"]
+          ],
+          "T4": [
+            [0, "b"],
+            ["b", "a+b"],
+            [0, "a+b"]
+          ],
+          "C": {
+            "points": [
+              ["a", 0],
+              ["a+b", "a"],
+              ["b", "a+b"],
+              [0, "b"]
+            ],
+            "outline": true,
+            "label": "c^2"
+          }
+        },
+        "both": {
+          "T1": [
+            [0, 0],
+            ["a", 0],
+            [0, "b"]
+          ],
+          "T2": [
+            ["a", 0],
+            ["a+b", 0],
+            ["a+b", "a"]
+          ],
+          "T3": [
+            ["a+b", "a"],
+            ["a+b", "a+b"],
+            ["b", "a+b"]
+          ],
+          "T4": [
+            [0, "b"],
+            ["b", "a+b"],
+            [0, "a+b"]
+          ],
+          "C": {
+            "points": [
+              ["a", 0],
+              ["a+b", "a"],
+              ["b", "a+b"],
+              [0, "b"]
+            ],
+            "outline": true,
+            "label": "c^2"
+          },
+          "R1": [
+            ["2*a+2*b+1", 0],
+            ["2*a+2*b+1", "b"],
+            ["a+2*b+1", "b"]
+          ],
+          "R2": [
+            ["a+2*b+1", "b"],
+            ["a+2*b+1", "a+b"],
+            ["a+b+1", "b"]
+          ],
+          "R3": [
+            ["a+b+1", "a+b"],
+            ["a+b+1", "b"],
+            ["a+2*b+1", "a+b"]
+          ],
+          "R4": [
+            ["a+2*b+1", 0],
+            ["2*a+2*b+1", 0],
+            ["a+2*b+1", "b"]
+          ],
+          "A": {
+            "points": [
+              ["a+2*b+1", "b"],
+              ["2*a+2*b+1", "b"],
+              ["2*a+2*b+1", "a+b"],
+              ["a+2*b+1", "a+b"]
+            ],
+            "outline": true,
+            "label": "a^2"
+          },
+          "B": {
+            "points": [
+              ["a+b+1", 0],
+              ["a+2*b+1", 0],
+              ["a+2*b+1", "b"],
+              ["a+b+1", "b"]
+            ],
+            "outline": true,
+            "label": "b^2"
+          }
+        }
+      },
+      "layout": "one"
+    },
+    {
+      "id": "eq",
+      "kit": "derivation",
+      "box": [0, -230, 900, 120],
+      "steps": ["c^2 = a^2 + b^2"]
+    }
+  ],
+  "beats": [
+    {
+      "show": "proof",
+      "hold": 0.4
+    },
+    {
+      "set": {
+        "proof.layout": "square"
+      },
+      "seconds": 1.2,
+      "hold": 0.5
+    },
+    {
+      "set": {
+        "proof.layout": "both"
+      },
+      "seconds": 1.4,
+      "hold": 0.6
+    },
+    {
+      "set": {
+        "proof.a": 1,
+        "proof.b": 2
+      },
+      "seconds": 1.2,
+      "hold": 0.3
+    },
+    {
+      "set": {
+        "proof.a": 1.5,
+        "proof.b": 1.5
+      },
+      "seconds": 1.2,
+      "hold": 0.4
+    },
+    {
+      "show": "eq.0",
+      "from": "proof",
+      "hold": 1.5
+    }
+  ]
+}

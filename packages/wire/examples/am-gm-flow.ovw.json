@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "title": "The AM-GM inequality",
+  "nodes": [
+    {
+      "id": "heading",
+      "kit": "title",
+      "text": "Why the average beats the geometric mean"
+    },
+    {
+      "id": "proof",
+      "kit": "derivation",
+      "mode": "flow",
+      "region": "center",
+      "colors": {"x": "blue", "y": "coral"},
+      "steps": [
+        "(x - y)^2 \\ge 0",
+        {"tex": "x^2 - 2xy + y^2 \\ge 0", "why": "\\text{expand}"},
+        {"tex": "x^2 + y^2 \\ge 2xy", "why": "\\text{add } 2xy"},
+        {"tex": "\\frac{x^2 + y^2}{2} \\ge xy", "why": "\\text{halve}"}
+      ]
+    }
+  ],
+  "beats": [
+    {"show": "proof.0"},
+    {"show": "proof.1"},
+    {"show": "proof.2"},
+    {"show": "proof.3", "hold": 1.5}
+  ]
+}

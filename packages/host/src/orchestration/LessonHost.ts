@@ -97,6 +97,11 @@ export class LessonHost {
     return this.adapter.lastReport.get(generation) ?? null;
   }
 
+  /** {@inheritDoc BeatAdapter.initialReport} */
+  public initialReportFor(generation: number) {
+    return this.adapter.initialReport.get(generation) ?? null;
+  }
+
   public stage(request: ChunkRequest) {
     return this.coordinator.stage(request);
   }

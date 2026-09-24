@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "title": "Area as a sum of rectangles",
+  "nodes": [
+    {"id": "heading", "kit": "title", "text": "Area as a sum of rectangles"},
+    {
+      "id": "graph",
+      "kit": "plot",
+      "region": "left",
+      "x": [0, 4.5],
+      "y": [0, 9],
+      "functions": {"f": {"expr": "0.5*(x-1.5)^2 + 2", "label": "f(x)"}},
+      "areas": [
+        {"under": "f", "from": 0.5, "to": 4, "rects": 7, "measure": true}
+      ]
+    },
+    {
+      "id": "sum",
+      "kit": "derivation",
+      "region": "right",
+      "mode": "morph",
+      "steps": [
+        "\\int_{0.5}^{4} f(x)\\,dx",
+        "\\int_{0.5}^{4} f(x)\\,dx \\approx f(0.5)\\Delta x",
+        "\\int_{0.5}^{4} f(x)\\,dx \\approx f(0.5)\\Delta x + f(1)\\Delta x + \\ldots",
+        "\\int_{0.5}^{4} f(x)\\,dx = \\lim_{n \\to \\infty} \\sum_{i=1}^{n} f(x_i)\\Delta x"
+      ]
+    }
+  ],
+  "beats": [
+    {"trace": "graph.f", "show": "sum.0"},
+    {"trace": "graph.area0", "hold": 0.4},
+    {"focus": "graph.area0.0", "show": "graph.area0.measure0", "hold": 0.3},
+    {"morph": "sum.1", "from": "graph.area0.measure0"},
+    {
+      "hide": "graph.area0.measure0",
+      "focus": "graph.area0.1",
+      "show": "graph.area0.measure1",
+      "hold": 0.3
+    },
+    {"morph": "sum.2", "from": "graph.area0.measure1"},
+    {
+      "hide": "graph.area0.measure1",
+      "focus": false,
+      "set": {"graph.areas.0.rects": 14},
+      "hold": 0.4
+    },
+    {"set": {"graph.areas.0.rects": 40}, "morph": "sum.3", "hold": 1.5}
+  ]
+}

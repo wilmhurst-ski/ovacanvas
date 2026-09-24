@@ -11,9 +11,9 @@ import type {AuditableNode} from './types';
  * in every copy. One implementation now backs every audit check.
  */
 export function worldBBox(node: AuditableNode): BBox {
-  return BBox.fromPoints(
-    ...node.cacheBBox().transformCorners(node.localToWorld()),
-  ).pixelPerfect;
+  const local = node.auditBBox?.() ?? node.cacheBBox();
+  return BBox.fromPoints(...local.transformCorners(node.localToWorld()))
+    .pixelPerfect;
 }
 
 /**

@@ -35,3 +35,4 @@ export * from './components/Scene3D';
 export * from './interaction/pick';
 export * from './interaction/project';
 export * from './interaction/unproject';
+export * from './declarative/buildWorld3D';

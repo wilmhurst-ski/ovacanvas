@@ -192,7 +192,7 @@ export function registerAuthoringRoutes(
     try {
       // Strategy choice is per topic, and the reason is returned to the client
       // so a run can be explained rather than just observed.
-      const selection = selectStrategy(topic);
+      const selection = selectStrategy(topic, env.OVACANVAS_STRATEGY);
       console.log(
         `[authoringApi] /api/generate starting for: "${topic}" (${selection.strategy.id})`,
       );

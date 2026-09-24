@@ -124,8 +124,9 @@ function applyFirstAvailableFix(
   source: string,
 ): string | null {
   for (const diagnostic of diagnostics) {
-    if (diagnostic.start === undefined || diagnostic.length === undefined)
-      {continue;}
+    if (diagnostic.start === undefined || diagnostic.length === undefined) {
+      continue;
+    }
     let fixes: readonly ts.CodeFixAction[];
     try {
       fixes = service.getCodeFixesAtPosition(

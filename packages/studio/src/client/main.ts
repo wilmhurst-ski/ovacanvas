@@ -2,6 +2,7 @@ import type {AuditFinding} from '@ovacanvas/2d';
 import type {BeatManifest} from '@ovacanvas/host';
 import {
   LessonHost,
+  LessonPlayer,
   createFallbackBeat,
   resolveBeatSource,
 } from '@ovacanvas/host';
@@ -36,6 +37,8 @@ const statusDot = document.getElementById('dot') as HTMLElement;
 let host: LessonHost | null = null;
 let currentSource: string | undefined;
 let beatCount = 0;
+/** The lesson playing, when the explanation runs longer than one beat. */
+let player: LessonPlayer | null = null;
 
 /**
  * The advisory vision review, on demand.
@@ -129,6 +132,8 @@ interface GenerateOutcome {
   ok: boolean;
   source?: string;
   code?: string;
+  /** A lesson: every part, compiled, in order. */
+  parts?: {id: string; title: string; code: string}[];
   attempts?: number;
   deterministic?: boolean;
   repaired?: boolean;
@@ -226,6 +231,56 @@ async function showFallback(topic: string, why: string): Promise<void> {
 }
 
 /**
+ * Play a lesson - an explanation longer than one beat - straight through.
+ *
+ * @remarks
+ * Each part goes through the same audit gate as a single beat, staged
+ * offstage while the one before it plays; the lesson's parts start where the
+ * last one ended, so the swaps read as one continuous animation.
+ */
+async function playLesson(
+  topic: string,
+  outcome: GenerateOutcome,
+  submittedAt: number | null,
+): Promise<void> {
+  if (!host || !outcome.parts) return;
+  setStatus('working', 'Checking the lesson before showing it…');
+  const base = ++beatCount;
+  const manifests = await Promise.all(
+    outcome.parts.map((part, index) =>
+      resolveBeatSource(`beat-${base}-${index + 1}`, topic, part.code),
+    ),
+  );
+  const count = manifests.length;
+  const lesson = new LessonPlayer(host, manifests, {
+    onPart: index =>
+      setStatus('ok', `Part ${index + 1} of ${count}`, outcome.provider ?? ''),
+    onEnd: () => setStatus('ok', 'Lesson complete', `${count} parts`),
+    onError: (reason, detail) => {
+      // eslint-disable-next-line no-console
+      console.warn('[ovc] lesson part refused:', reason, detail);
+      void showFallback(
+        topic,
+        'Part of the lesson did not pass its checks, so it was not shown.',
+      );
+    },
+  });
+  player = lesson;
+  const started = await lesson.start();
+  if (!started.ok) {
+    await showFallback(
+      topic,
+      'The lesson did not pass its checks, so it was not shown.',
+    );
+    return;
+  }
+  currentSource = outcome.source;
+  if (submittedAt !== null) {
+    telemetry.record(STAGE.beatVisible, performance.now() - submittedAt);
+  }
+}
+
+/**
  * Author one beat and put it on screen.
  *
  * @remarks
@@ -264,6 +319,13 @@ async function authorInto(
     return;
   }
 
+  player?.stop();
+  player = null;
+  if (outcome.parts && outcome.parts.length > 1) {
+    await playLesson(topic, outcome, submittedAt);
+    return;
+  }
+
   setStatus('working', 'Checking the result before showing it…');
   const id = `beat-${++beatCount}`;
   telemetry.start(STAGE.resolve);
@@ -280,7 +342,7 @@ async function authorInto(
 
   if (!staged.ok) {
     const report = host.lastReportFor(
-      host.status().stagingGeneration ?? host.status().activeGeneration ?? 1,
+      host.status().candidateGeneration ?? host.status().activeGeneration ?? 1,
     );
     console.warn('[ovc] staged not ok:', staged, 'findings:', report?.findings);
     // Authored and compiled, but its own rendered geometry did not pass the

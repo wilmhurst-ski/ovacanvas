@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "title": "Gradient descent rolls downhill",
+  "nodes": [
+    {
+      "id": "heading",
+      "kit": "title",
+      "text": "Gradient descent walks downhill"
+    },
+    {
+      "id": "plot",
+      "kit": "graph3d",
+      "region": "left",
+      "surface": "0.5x^2 + y^2",
+      "x": [-2, 2],
+      "y": [-2, 2],
+      "labels": {"z": "loss"},
+      "curves": {"path": {"x": "1.8(0.55)^t", "y": "1.5(0.3)^t", "t": [0, 6]}},
+      "points": {"start": [1.8, 1.5], "minimum": [0, 0]},
+      "vectors": {"uphill": {"at": [1.8, 1.5], "direction": "gradient"}}
+    },
+    {
+      "id": "why",
+      "kit": "list",
+      "region": "right",
+      "items": [
+        {"text": "The gradient points uphill"},
+        {"text": "Step the other way, again and again"},
+        {"text": "Steps shrink as the slope flattens"}
+      ]
+    }
+  ],
+  "beats": [
+    {"hold": 0.4},
+    {"show": ["plot.uphill", "why.0"], "hold": 0.6},
+    {"show": ["plot.path", "why.1"], "hold": 0.6},
+    {"highlight": "plot.minimum", "show": "why.2", "hold": 0.8}
+  ]
+}

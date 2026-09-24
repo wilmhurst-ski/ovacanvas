@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "title": "The water cycle",
+  "nodes": [
+    {
+      "id": "heading",
+      "kit": "title",
+      "text": "The water cycle",
+      "subtitle": "The same water, going round and round"
+    },
+    {
+      "id": "cycle",
+      "kit": "graph",
+      "layout": "cycle",
+      "region": "full",
+      "nodes": {
+        "sea": "Ocean",
+        "cloud": "Clouds",
+        "rain": "Rain",
+        "river": "Rivers"
+      },
+      "edges": [
+        "sea->cloud: evaporation",
+        "cloud->rain: condensation",
+        "rain->river: runoff",
+        "river->sea"
+      ]
+    }
+  ],
+  "beats": [
+    {"hold": 0.4},
+    {"trace": "cycle.sea->cloud", "pace": "quick"},
+    {"trace": "cycle.cloud->rain", "pace": "quick"},
+    {"trace": "cycle.rain->river", "pace": "quick"},
+    {"trace": "cycle.river->sea", "pace": "quick", "hold": 1}
+  ]
+}

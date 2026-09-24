@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "title": "Geometry proof: KL/MN = PK^2/PN^2",
+  "nodes": [
+    {
+      "id": "heading",
+      "component": "Txt",
+      "role": "heading",
+      "props": {"text": "Geometry proof", "position": [0, -430]}
+    },
+    {
+      "id": "fig",
+      "kit": "geometry.figure",
+      "region": "left",
+      "points": {
+        "K": [-0.79, -0.38],
+        "L": [-0.15, -0.73],
+        "M": [0.8, 0.22],
+        "N": [-0.79, 0.54],
+        "P": [-0.31, -0.08]
+      },
+      "segments": "KL LM MN NK KP NP",
+      "dashed": "LP PM",
+      "angles": {
+        "LKP": "\\alpha",
+        "PKN": "\\beta",
+        "PLK": "\\beta",
+        "MLP": "\\alpha",
+        "PML": "\\theta",
+        "NMP": "\\gamma",
+        "PNM": "\\gamma",
+        "KNP": "\\theta"
+      }
+    },
+    {
+      "id": "credit",
+      "component": "Txt",
+      "props": {
+        "text": "Amirul Faiz, Mar. 24, 2025",
+        "fontSize": 20,
+        "fill": {"theme": "secondaryInk"},
+        "position": [-450, 410]
+      }
+    },
+    {
+      "id": "proof",
+      "kit": "derivation",
+      "region": "right",
+      "steps": [
+        {"tex": "\\text{Prove that } \\frac{KL}{MN} = \\frac{PK^2}{PN^2}"},
+        {
+          "tex": "\\frac{KL}{MN} = \\frac{PK}{PN} \\cdot \\frac{\\sin \\gamma}{\\sin \\beta}",
+          "why": "\\text{from } \\triangle KLP \\text{ and } \\triangle PMN"
+        },
+        {
+          "tex": "\\frac{\\sin \\gamma}{\\sin \\beta} = \\frac{PK}{PN}",
+          "why": "\\text{from } \\triangle PKN"
+        },
+        {
+          "tex": "\\therefore \\frac{KL}{MN} = \\frac{PK^2}{PN^2} \\quad \\blacksquare"
+        }
+      ]
+    }
+  ],
+  "beats": [
+    {"hold": 0.5},
+    {"highlight": ["fig.KLP", "fig.PMN"], "show": "proof.1"},
+    {"highlight": "fig.PKN", "show": "proof.2"},
+    {"show": "proof.3", "hold": 1}
+  ]
+}

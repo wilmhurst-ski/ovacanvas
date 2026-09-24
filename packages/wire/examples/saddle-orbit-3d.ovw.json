@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "title": "A saddle point curves up one way and down the other",
+  "nodes": [
+    {
+      "id": "heading",
+      "kit": "title",
+      "text": "A saddle: up one way, down the other"
+    },
+    {
+      "id": "saddle",
+      "kit": "graph3d",
+      "surface": "x^2 - y^2",
+      "x": [-1.5, 1.5],
+      "y": [-1.5, 1.5],
+      "colormap": "coolwarm",
+      "curves": {
+        "up": {"x": "t", "y": "0", "t": [-1.5, 1.5]},
+        "down": {"x": "0", "y": "t", "t": [-1.5, 1.5]}
+      },
+      "points": {"saddle point": [0, 0]},
+      "vectors": {"normal": {"at": [0, 0], "direction": "normal"}}
+    }
+  ],
+  "beats": [
+    {"hold": 0.3},
+    {"show": "saddle.up", "hold": 0.3},
+    {"show": "saddle.down", "hold": 0.3},
+    {"play": "saddle", "hold": 0.3}
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "title": "Current splits between parallel branches",
+  "nodes": [
+    {
+      "id": "heading",
+      "kit": "title",
+      "text": "Current splits in a parallel circuit"
+    },
+    {
+      "id": "c",
+      "kit": "circuit",
+      "region": "left",
+      "parts": {
+        "B1": "battery: 9 V",
+        "S1": "closed-switch",
+        "R1": "resistor: 100 Ω",
+        "L1": "lamp",
+        "L2": "lamp",
+        "R2": "resistor: 47 Ω"
+      },
+      "circuit": "B1 - S1 - R1 - (L1 | L2 - R2)"
+    },
+    {
+      "id": "why",
+      "kit": "list",
+      "region": "right",
+      "items": [
+        {"text": "Every branch gets the same voltage", "icon": "zap"},
+        {"text": "The currents add up to the total", "icon": "plus"},
+        {"text": "One bulb failing leaves the other lit", "icon": "lightbulb"}
+      ]
+    }
+  ],
+  "beats": [
+    {"hold": 0.3},
+    {"play": "c", "hold": 0.2},
+    {"show": ["why.0", "why.1", "why.2"], "hold": 0.6}
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "title": "Icons",
+  "nodes": [
+    {
+      "id": "heading",
+      "kit": "title",
+      "text": "Where your electricity comes from"
+    },
+    {
+      "id": "chain",
+      "kit": "icons",
+      "layout": "flow",
+      "region": "top",
+      "items": [
+        {
+          "icon": "power plant",
+          "label": "Power station"
+        },
+        {
+          "icon": "thunder",
+          "label": "Transmission"
+        },
+        {
+          "icon": "house",
+          "label": "Home"
+        },
+        {
+          "icon": "light bulb",
+          "label": "Light"
+        }
+      ]
+    },
+    {
+      "id": "kinds",
+      "kit": "icons",
+      "layout": "row",
+      "style": "line",
+      "region": "bottom",
+      "items": [
+        {
+          "icon": "sun",
+          "label": "Solar"
+        },
+        {
+          "icon": "wind",
+          "label": "Wind"
+        },
+        {
+          "icon": "water drop",
+          "label": "Hydro"
+        },
+        {
+          "icon": "atom",
+          "label": "Nuclear"
+        },
+        {
+          "icon": "flame",
+          "label": "Gas"
+        },
+        {
+          "icon": "database",
+          "label": "Storage"
+        }
+      ]
+    }
+  ],
+  "beats": [
+    {
+      "hold": 0.3
+    },
+    {
+      "trace": ["chain.0->1", "chain.1->2", "chain.2->3"],
+      "hold": 0.6
+    }
+  ]
+}

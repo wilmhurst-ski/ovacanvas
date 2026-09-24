@@ -225,6 +225,19 @@ export function dropEmptyMayTouchReasons(
  * correction by inverse area (`shareA = areaB / (areaA + areaB)`), the
  * identical formula the old pairwise code duplicated by hand.
  */
+/**
+ * Whether repair must leave this item where it is: declared `fixed`, or a
+ * point-defined line. A line's `position()` only offsets its points, so
+ * "nudging" a connector bound to two nodes detaches it from both - it moves
+ * off its endpoints and collides with everything along its new path.
+ */
+function isPinned(item: AuditItem): boolean {
+  if (item.fixed) return true;
+  return (
+    typeof (item.node as {parsedPoints?: unknown}).parsedPoints === 'function'
+  );
+}
+
 function repairCollisions(
   byId: ReadonlyMap<string, AuditItem>,
   findings: readonly AuditFinding[],
@@ -255,17 +268,20 @@ function repairCollisions(
     // working for any real `AuditableNode` regardless of what it takes to
     // resolve one to world space.
     const box = item.node.cacheBBox();
+    const pinned = isPinned(item);
     placementItems.push({
       id,
       x: pos.x,
       y: pos.y,
       width: box.width,
       height: box.height,
+      fixed: pinned,
     });
-    repairableNodes.set(id, node);
+    if (!pinned) repairableNodes.set(id, node);
   }
 
-  if (placementItems.length < 2) return;
+  // Nothing free to move means nothing mechanical can help.
+  if (placementItems.length < 2 || repairableNodes.size === 0) return;
 
   const resolved = arrangeWithoutOverlap(placementItems);
   for (const placement of resolved) {
@@ -298,8 +314,9 @@ function smallestSafeAreaNudge(
     if (box.left < area.left) dx = area.left - box.left + NUDGE_MARGIN;
     else if (box.right > area.right) dx = area.right - box.right - NUDGE_MARGIN;
     if (box.top < area.top) dy = area.top - box.top + NUDGE_MARGIN;
-    else if (box.bottom > area.bottom)
-      {dy = area.bottom - box.bottom - NUDGE_MARGIN;}
+    else if (box.bottom > area.bottom) {
+      dy = area.bottom - box.bottom - NUDGE_MARGIN;
+    }
 
     if (dx === 0 && dy === 0) continue;
     const candidate = new Vector2(dx, dy);
@@ -327,7 +344,7 @@ function repairSafeAreaViolations(
   )) {
     const [id] = finding.entities;
     const item = byId.get(id);
-    if (!item) continue;
+    if (!item || isPinned(item)) continue;
 
     const node = item.node as unknown as RepairableNode;
     if (typeof node.position !== 'function') continue;

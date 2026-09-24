@@ -17,8 +17,9 @@ export function transitionSampleFrames(
   startFrame: number,
   endFrame: number,
 ): number[] {
-  if (endFrame < startFrame)
-    {throw new Error('Transition end frame precedes its start frame');}
+  if (endFrame < startFrame) {
+    throw new Error('Transition end frame precedes its start frame');
+  }
   const span = endFrame - startFrame;
   return [
     ...new Set(

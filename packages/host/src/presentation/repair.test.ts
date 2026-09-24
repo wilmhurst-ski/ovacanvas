@@ -56,6 +56,75 @@ function item(
   return {id, node: node as never, halo: 0, mayTouch};
 }
 
+/** A point-defined line: `position()` only offsets its points. */
+class FakeLine extends FakeNode {
+  public parsedPoints(): Vector2[] {
+    return [new Vector2(-50, 0), new Vector2(50, 0)];
+  }
+}
+
+function collision(a: string, b: string): AuditFinding {
+  return {
+    ruleId: 'collision',
+    severity: 'blocking',
+    entities: [a, b],
+    geometry: BBox.fromSizeCentered(new Vector2(10, 10)),
+    message: `Visual collision: ${a} x ${b}`,
+  };
+}
+
+describe('attemptMechanicalRepair and pinned items', () => {
+  it('moves only the free item when the other is declared fixed', () => {
+    const vertex = new FakeNode(0, 0);
+    const label = new FakeNode(10, 0);
+    const result = attemptMechanicalRepair(
+      [{...item('vertex', vertex), fixed: true}, item('label', label)],
+      [collision('vertex', 'label')],
+    );
+    expect(result.changedIds).toEqual(['label']);
+    expect(vertex.position()).toEqual(new Vector2(0, 0));
+    expect(label.position().x).toBeGreaterThan(10);
+  });
+
+  it('never moves a point-defined line, which would detach it from its endpoints', () => {
+    const connector = new FakeLine(0, 0);
+    const label = new FakeNode(10, 0);
+    const result = attemptMechanicalRepair(
+      [item('connector', connector), item('label', label)],
+      [collision('connector', 'label')],
+    );
+    expect(result.changedIds).toEqual(['label']);
+    expect(connector.position()).toEqual(new Vector2(0, 0));
+  });
+
+  it('does nothing when every item in a collision is pinned', () => {
+    const a = new FakeLine(0, 0);
+    const b = new FakeNode(5, 0);
+    const result = attemptMechanicalRepair(
+      [item('a', a), {...item('b', b), fixed: true}],
+      [collision('a', 'b')],
+    );
+    expect(result.attempted).toBe(false);
+  });
+
+  it('does not nudge a pinned item back into the safe area', () => {
+    const vertex = new FakeNode(900, 0);
+    const finding: AuditFinding = {
+      ruleId: 'safe-area',
+      severity: 'blocking',
+      entities: ['vertex'],
+      geometry: new BBox(890, -10, 20, 20),
+      message: 'Safe-area violation: vertex',
+    };
+    const result = attemptMechanicalRepair(
+      [{...item('vertex', vertex), fixed: true}],
+      [finding],
+      new BBox(-800, -400, 1600, 800),
+    );
+    expect(result.attempted).toBe(false);
+  });
+});
+
 describe('attemptMechanicalRepair', () => {
   it('pushes two colliding nodes apart along their center line', () => {
     const a = new FakeNode(0, 0);
