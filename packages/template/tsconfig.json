@@ -1,7 +1,0 @@
-{
-  "extends": "@ovacanvas/2d/tsconfig.project.json",
-  "compilerOptions": {
-    "types": ["node"]
-  },
-  "include": ["src"]
-}

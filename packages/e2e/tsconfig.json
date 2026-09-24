@@ -1,9 +1,0 @@
-{
-  "extends": "@ovacanvas/2d/tsconfig.project.json",
-  "compilerOptions": {
-    "moduleResolution": "bundler",
-    "strictNullChecks": true,
-    "skipLibCheck": true
-  },
-  "include": ["src", "tests", "foundation", "interaction", "learner"]
-}
