@@ -2,6 +2,7 @@ import chroma from 'chroma-js';
 import type {SceneNode, Touch, Value} from '../document/model.js';
 import {drawIcon, hexColor} from '../icons/draw.js';
 import {resolveIcon} from '../icons/library.js';
+import {arrowProps} from '../kits/connect.js';
 import {colorValue, textBox, texWidthEm} from '../kits/fields.js';
 import type {Params} from '../kits/params.js';
 import type {Box, KitExpansion, KitPart} from '../kits/types.js';
@@ -52,7 +53,6 @@ export interface DiagramSpec {
 /** Fill of the box the drawing (labels included) is fitted into. */
 const FILL = 0.94;
 const LINE_WIDTH = 4;
-const ARROW_WIDTH = 5;
 const RING_WIDTH = 3;
 const SHAPE_STROKE = 3;
 const LABEL_GAP = 10;
@@ -784,10 +784,18 @@ export function drawDiagram(options: DrawOptions): KitExpansion {
           props: {
             points: (m.points ?? []).map(p => roundVec(toStage(p))),
             stroke: stroke ?? {theme: 'ink'},
-            lineWidth: m.width ?? (m.kind === 'arrow' ? ARROW_WIDTH : m.kind === 'ray' ? 3 : LINE_WIDTH),
-            lineCap: 'round',
-            lineJoin: 'round',
-            ...(m.arrow ? {endArrow: true, arrowSize: 18} : {}),
+            // Arrows in the house style: light, with a slim swept head; a
+            // force or other quantity a little bolder than a connector.
+            ...(m.arrow
+              ? arrowProps(m.vector ? 'bold' : 'normal')
+              : {lineCap: 'round', lineJoin: 'round'}),
+            lineWidth:
+              m.width ??
+              (m.arrow
+                ? (arrowProps(m.vector ? 'bold' : 'normal').lineWidth as number)
+                : m.kind === 'ray'
+                  ? 3
+                  : LINE_WIDTH),
             ...(m.dashed ? {lineDash: [12, 10]} : {}),
           },
         });

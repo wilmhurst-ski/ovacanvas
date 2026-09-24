@@ -48,7 +48,21 @@ export interface CurveProps extends ShapeProps {
    * {@inheritDoc Curve.arrowSize}
    */
   arrowSize?: SignalValue<number>;
+  /**
+   * {@inheritDoc Curve.arrowStyle}
+   */
+  arrowStyle?: SignalValue<ArrowStyle>;
 }
+
+/**
+ * The shape of a curve's arrowheads.
+ *
+ * @remarks
+ * - `triangle`: a wide filled triangle (the original head);
+ * - `swept`: a slim filled head with a notched back, for light diagrams;
+ * - `open`: two strokes meeting at the tip, drawn with the curve's own line.
+ */
+export type ArrowStyle = 'triangle' | 'swept' | 'open';
 
 @nodeName('Curve')
 export abstract class Curve extends Shape {
@@ -156,6 +170,13 @@ export abstract class Curve extends Shape {
   @initial(24)
   @signal()
   public declare readonly arrowSize: SimpleSignal<number, this>;
+
+  /**
+   * The shape of the arrowheads: `triangle` (default), `swept` or `open`.
+   */
+  @initial('triangle')
+  @signal()
+  public declare readonly arrowStyle: SimpleSignal<ArrowStyle, this>;
 
   protected canHaveSubpath = false;
 
@@ -341,7 +362,9 @@ export abstract class Curve extends Shape {
       subpath.closePath();
     }
     this.processSubpath(subpath, startPoint, endPoint);
-    path.addPath(subpath);
+    // Nothing visible (a line waiting to be traced): draw nothing at all -
+    // a zero-length stroke would still paint a dot with round caps.
+    if (end - start > 1e-6) path.addPath(subpath);
 
     return {
       startPoint: startPoint ?? Vector2.zero,
@@ -423,17 +446,27 @@ export abstract class Curve extends Shape {
       return;
     }
 
+    const style = this.arrowStyle();
     context.save();
     context.beginPath();
     if (this.endArrow()) {
-      this.drawArrow(context, endPoint, endTangent.flipped, arrowSize);
+      this.drawArrow(context, endPoint, endTangent.flipped, arrowSize, style);
     }
     if (this.startArrow()) {
-      this.drawArrow(context, startPoint, startTangent, arrowSize);
+      this.drawArrow(context, startPoint, startTangent, arrowSize, style);
     }
-    context.fillStyle = resolveCanvasStyle(this.stroke(), context);
-    context.closePath();
-    context.fill();
+    if (style === 'open') {
+      context.strokeStyle = resolveCanvasStyle(this.stroke(), context);
+      context.lineWidth = this.lineWidth();
+      context.lineCap = 'round';
+      context.lineJoin = 'round';
+      context.setLineDash([]);
+      context.stroke();
+    } else {
+      context.fillStyle = resolveCanvasStyle(this.stroke(), context);
+      context.closePath();
+      context.fill();
+    }
     context.restore();
   }
 
@@ -442,13 +475,34 @@ export abstract class Curve extends Shape {
     center: Vector2,
     tangent: Vector2,
     arrowSize: number,
+    style: ArrowStyle = 'triangle',
   ) {
     const normal = tangent.perpendicular;
+    // The tip, half an arrow beyond where the curve stops.
     const origin = center.add(tangent.scale(-arrowSize / 2));
-
+    if (style === 'triangle') {
+      moveTo(context, origin);
+      lineTo(context, origin.add(tangent.add(normal).scale(arrowSize)));
+      lineTo(context, origin.add(tangent.sub(normal).scale(arrowSize)));
+      lineTo(context, origin);
+      context.closePath();
+      return;
+    }
+    // Slim heads: about 26 degrees either side of the line.
+    const back = tangent.scale(arrowSize);
+    const side = normal.scale(arrowSize * 0.48);
+    const left = origin.add(back).add(side);
+    const right = origin.add(back).sub(side);
+    if (style === 'open') {
+      moveTo(context, left);
+      lineTo(context, origin);
+      lineTo(context, right);
+      return;
+    }
     moveTo(context, origin);
-    lineTo(context, origin.add(tangent.add(normal).scale(arrowSize)));
-    lineTo(context, origin.add(tangent.sub(normal).scale(arrowSize)));
+    lineTo(context, left);
+    lineTo(context, origin.add(tangent.scale(arrowSize * 0.72)));
+    lineTo(context, right);
     lineTo(context, origin);
     context.closePath();
   }

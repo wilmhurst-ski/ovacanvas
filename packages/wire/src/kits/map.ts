@@ -1023,9 +1023,10 @@ export const map: KitSpec = {
         props: {
           points: drawn,
           stroke: THEME_HEX.coral,
-          lineWidth: 5,
+          lineWidth: 4,
           endArrow: true,
           arrowSize: 16,
+          arrowStyle: 'swept',
         },
       });
       base(routeId, `the route ${route.name} crosses the map`);

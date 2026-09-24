@@ -394,3 +394,48 @@ describe('found by the held-out live batch', () => {
   });
 });
 
+describe('arrows that bend and turn', () => {
+  it('bows a connector between parts and still stops short of both', () => {
+    const {placed, issues} = resolve({
+      a: {box: [1, 1], at: [0, 0]},
+      b: {box: [1, 1], at: [4, 0]},
+      link: {arrow: ['a', 'b'], bend: 0.4},
+    });
+    expect(issues).toEqual([]);
+    const points = placed.get('link')!.points!;
+    const lowest = Math.min(...points.map(p => p[1]));
+    // Bowed to the left of its direction (up, on screen) by a good margin.
+    expect(lowest).toBeLessThan(-0.6);
+    // Leaves and reaches each box outside it.
+    expect(Math.abs(points[0][0]) > 0.5 || Math.abs(points[0][1]) > 0.5).toBe(true);
+    const last = points[points.length - 1];
+    expect(Math.abs(last[0] - 4) > 0.5 || Math.abs(last[1]) > 0.5).toBe(true);
+  });
+
+  it('runs an arrow round a circle, the way the angles go', () => {
+    const {placed} = resolve({
+      wheel: {circle: 2},
+      spin: {arrow: {along: 'wheel', from: 0, to: 90}},
+    });
+    const points = placed.get('spin')!.points!;
+    const [sx, sy] = points[0];
+    const [ex, ey] = points[points.length - 1];
+    // From the right (0) round to the top (90), just outside the rim.
+    expect(sx).toBeGreaterThan(2);
+    expect(Math.abs(sy)).toBeLessThan(1e-6);
+    expect(Math.abs(ex)).toBeLessThan(1e-6);
+    expect(ey).toBeLessThan(-2);
+    for (const [x, y] of points) expect(Math.hypot(x, y)).toBeGreaterThan(2);
+  });
+
+  it('smooths a line through its points', () => {
+    const {placed} = resolve({
+      rope: {line: [[0, 0], [1, 1], [2, 0]], smooth: true},
+    });
+    const points = placed.get('rope')!.points!;
+    expect(points.length).toBeGreaterThan(10);
+    // It passes through the middle point.
+    expect(points.some(([x, y]) => Math.hypot(x - 1, y - 1) < 1e-6)).toBe(true);
+  });
+});
+

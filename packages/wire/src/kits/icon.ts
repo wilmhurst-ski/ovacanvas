@@ -13,6 +13,15 @@ import {
   placementBox,
   wrapText,
 } from './fields.js';
+import {
+  arc,
+  arrowProps,
+  ellipseAngle,
+  rounded,
+  trim,
+  type End,
+  type Vec,
+} from './connect.js';
 import type {Box, KitExpansion, KitNode, KitPart, KitSpec} from './types.js';
 
 /** Check an icon name, with the closest real names when it is unknown. */
@@ -405,6 +414,7 @@ export const icons: KitSpec = {
     const touches: Touch[] = [];
     const parts = new Map<string, KitPart>();
     const radii: number[] = [];
+    const itemNodes: string[][] = [];
     items.forEach((item, i) => {
       const def: IconDef = resolveIcon(item.name)!;
       const drawn = drawIcon(`${node.id}${i}`, def, at[i], {
@@ -460,44 +470,76 @@ export const icons: KitSpec = {
           });
         }
       }
+      itemNodes.push(partNodes);
       parts.set(String(i), {
         nodes: partNodes,
         ...(drawn.strokeId ? {traceable: [drawn.strokeId]} : {}),
       });
     });
 
-    // Arrows from each item to the next.
+    // Everything one item covers - its icon and the words under it - so an
+    // arrow stops short of the words as well as the picture.
+    const itemEnd = (i: number): End => {
+      let minX = at[i][0] - radii[i];
+      let maxX = at[i][0] + radii[i];
+      let minY = at[i][1] - radii[i];
+      let maxY = at[i][1] + radii[i];
+      for (const id of itemNodes[i] ?? []) {
+        const n = nodes.find(x => x.id === id);
+        if (!n || n.component !== 'Txt' || !n.props) continue;
+        const [x, y] = n.props.position as number[];
+        const size = typeof n.props.fontSize === 'number' ? n.props.fontSize : 24;
+        const w = measureText(String(n.props.text ?? ''), size) + size * 0.2;
+        const h = size * 1.3;
+        minX = Math.min(minX, x - w / 2);
+        maxX = Math.max(maxX, x + w / 2);
+        minY = Math.min(minY, y - h / 2);
+        maxY = Math.max(maxY, y + h / 2);
+      }
+      return {
+        kind: 'box',
+        c: [(minX + maxX) / 2, (minY + maxY) / 2],
+        w: maxX - minX,
+        h: maxY - minY,
+      };
+    };
+    // Arrows from each item to the next: along the line of a flow, round
+    // the ring of a cycle - in the house style, clear of both icons.
     if (layout === 'flow' || layout === 'cycle') {
       const count = layout === 'cycle' ? n : n - 1;
+      // The ring the cycle was laid out on (see positions()).
+      const cell = size * factor;
+      const centre: Vec = [box.x, box.y - 20];
+      const ring: [number, number] = [
+        box.width / 2 - cell * 0.75,
+        box.height / 2 - cell * 0.8,
+      ];
       for (let i = 0; i < count; i++) {
         const j = (i + 1) % n;
-        const [x1, y1] = at[i];
-        const [x2, y2] = at[j];
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const length = Math.hypot(dx, dy) || 1;
-        const gapA = radii[i] + 18;
-        const gapB = radii[j] + 18;
-        if (length <= gapA + gapB + 20) continue;
+        const a: Vec = [at[i][0], at[i][1]];
+        const b: Vec = [at[j][0], at[j][1]];
+        if (Math.hypot(b[0] - a[0], b[1] - a[1]) <= radii[i] + radii[j] + 56) {
+          continue;
+        }
+        const raw =
+          layout === 'cycle' && n > 2
+            ? arc(
+                centre,
+                ring,
+                ellipseAngle(a, centre, ring),
+                ellipseAngle(b, centre, ring),
+                true,
+              )
+            : [a, b];
+        const path = trim(raw, itemEnd(i), itemEnd(j), 14);
         const arrowId = `${node.id}Arrow${i}`;
         nodes.push({
           id: arrowId,
           component: 'Line',
           props: {
-            points: [
-              [
-                Math.round(x1 + (dx / length) * gapA),
-                Math.round(y1 + (dy / length) * gapA),
-              ],
-              [
-                Math.round(x2 - (dx / length) * gapB),
-                Math.round(y2 - (dy / length) * gapB),
-              ],
-            ],
+            points: rounded(path),
             stroke: {theme: 'secondaryInk'},
-            lineWidth: 4,
-            endArrow: true,
-            arrowSize: 14,
+            ...arrowProps('normal'),
           },
         });
         parts.set(`${i}->${j}`, {nodes: [arrowId], traceable: [arrowId]});

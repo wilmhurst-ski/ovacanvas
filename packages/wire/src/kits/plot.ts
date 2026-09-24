@@ -689,7 +689,8 @@ export const plot: KitSpec = {
           stroke: {theme: 'ink'},
           lineWidth: 2.5,
           endArrow: true,
-          arrowSize: 14,
+          arrowSize: 13,
+          arrowStyle: 'swept',
         },
       },
       {
@@ -704,7 +705,8 @@ export const plot: KitSpec = {
           stroke: {theme: 'ink'},
           lineWidth: 2.5,
           endArrow: true,
-          arrowSize: 14,
+          arrowSize: 13,
+          arrowStyle: 'swept',
         },
       },
     );

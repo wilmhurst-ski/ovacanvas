@@ -3,6 +3,7 @@ import {isObject} from '../document/values.js';
 import {textBox, texWidthEm} from '../kits/fields.js';
 import {ExpressionError} from '../kits/expression.js';
 import {parseWithParams, type Params} from '../kits/params.js';
+import {arc, curve, smooth, trim, type End} from '../kits/connect.js';
 import {texHeightEmExact} from '../tex/terms.js';
 import {
   add,
@@ -20,6 +21,7 @@ import {
   len,
   lineParams,
   mul,
+  pathLength,
   rotate,
   seeded,
   stageRotation,
@@ -97,9 +99,12 @@ export const STYLE_KEYS = [
 ];
 /** An arrow's own keys, also accepted written on the part itself. */
 export const VECTOR_KEYS = ['from', 'to', 'dir', 'length', 'component'];
+/** How a line or arrow runs: bowed, smoothed through its points. */
+export const PATH_KEYS = ['bend', 'smooth'];
 export const PART_KEYS = [
   ...SHAPE_KEYS,
   ...VECTOR_KEYS,
+  ...PATH_KEYS,
   ...PLACE_KEYS,
   ...GROUP_KEYS,
   ...STYLE_KEYS,
@@ -227,6 +232,8 @@ export interface Mark {
   readonly links?: readonly string[];
   /** Whether the text is on a solid fill (drawn in paper colour). */
   readonly onSolid?: boolean;
+  /** An arrow standing for a quantity (a force): drawn a little bolder. */
+  readonly vector?: boolean;
   /** A shape with words written inside it (drawn tinted, not solid). */
   readonly holdsText?: boolean;
 }
@@ -1166,6 +1173,24 @@ export function resolveDiagram(input: ResolveInput): Resolved {
       const back = sub(toward, edge);
       return len(back) > px(12) ? add(edge, mul(unit(back), px(6))) : edge;
     };
+    /** A part a path joins, as the shape it must stop short of. */
+    const endOf = (ref: Value): End | null => {
+      if (typeof ref !== 'string') return null;
+      const t = target(ref, where(key));
+      if (!t || t.anchor) return null;
+      const p = t.placed;
+      if (p.kind === 'point') return null;
+      if (p.kind === 'circle' || p.kind === 'ring' || p.kind === 'dot') {
+        return {kind: 'circle', c: p.center, r: p.w / 2};
+      }
+      const b = p.bounds;
+      return {
+        kind: 'box',
+        c: centerOf(b),
+        w: b.maxX - b.minX,
+        h: b.maxY - b.minY,
+      };
+    };
     const linkOf = (ref: Value | undefined) => {
       if (typeof ref === 'string') links.push(ref.split('.').slice(0, 2).filter(s => !ANCHORS.includes(s)).join('.'));
     };
@@ -1178,11 +1203,41 @@ export function resolveDiagram(input: ResolveInput): Resolved {
         report(where(key), `a ${key} needs at least two points`);
         points = points.length ? [points[0], add(points[0], [1, 0])] : [[0, 0], [1, 0]];
       } else if (key !== 'ray') {
-        // A connector between two parts runs edge to edge.
-        const first = clipTo(value[0], points[1]);
-        const last = clipTo(value[value.length - 1], points[points.length - 2]);
-        if (first) points[0] = first;
-        if (last) points[points.length - 1] = last;
+        const bend =
+          raw.bend === undefined ? 0 : (number(raw.bend, where('bend')) ?? 0);
+        const smoothed = raw.smooth === true;
+        if (raw.smooth !== undefined && typeof raw.smooth !== 'boolean') {
+          report(where('smooth'), 'smooth is true or false');
+        }
+        if (bend || (smoothed && points.length > 2)) {
+          // A bowed or smoothed path, cut where it leaves and reaches the
+          // parts it joins (a gap short of each).
+          const pxLength = pathLength(points) * scale;
+          const path =
+            smoothed && points.length > 2
+              ? smooth(
+                  points,
+                  Math.max(8, Math.ceil(pxLength / (points.length - 1) / 5)),
+                )
+              : curve(
+                  points[0],
+                  points[points.length - 1],
+                  bend,
+                  Math.max(16, Math.ceil((pxLength * (1 + Math.abs(bend))) / 5)),
+                );
+          points = trim(
+            path,
+            endOf(value[0]),
+            endOf(value[value.length - 1]),
+            px(8),
+          );
+        } else {
+          // A connector between two parts runs edge to edge.
+          const first = clipTo(value[0], points[1]);
+          const last = clipTo(value[value.length - 1], points[points.length - 2]);
+          if (first) points[0] = first;
+          if (last) points[points.length - 1] = last;
+        }
         linkOf(value[0]);
         linkOf(value[value.length - 1]);
       }
@@ -1193,7 +1248,8 @@ export function resolveDiagram(input: ResolveInput): Resolved {
       const spec: Readonly<Record<string, Value>> =
         typeof value === 'string' ? {to: value} : value;
       const extra = Object.keys(spec).filter(
-        k => !['from', 'to', 'dir', 'length', 'component'].includes(k),
+        k =>
+          !['from', 'to', 'dir', 'length', 'component', 'along', 'radius'].includes(k),
       );
       if (extra.length) {
         report(
@@ -1202,6 +1258,30 @@ export function resolveDiagram(input: ResolveInput): Resolved {
           'an arrow is {"from", "dir", "length"} (a vector), {"from", "to"}, {"to": part, "from": "below"} (a pointer) or {"from", "component": vector, "dir"}',
         );
       }
+      if (spec.along !== undefined) {
+        // Round a ring or circle, from one angle to another (degrees, 0 =
+        // right, 90 = up): counter-clockwise when "to" is larger.
+        const t = typeof spec.along === 'string' ? target(spec.along, where(key)) : null;
+        if (typeof spec.along !== 'string') report(where(key), '"along" names a ring or circle part');
+        const a0 = number(spec.from ?? 0, where(key));
+        const a1 = number(spec.to ?? 90, where(key));
+        if (t && a0 !== null && a1 !== null) {
+          const host = t.placed;
+          if (!['ring', 'circle', 'ellipse', 'dot'].includes(host.kind)) {
+            report(where(key), `"${String(spec.along)}" is not a ring or circle`);
+          }
+          // On a ring; just outside anything filled.
+          const r =
+            spec.radius !== undefined
+              ? (number(spec.radius, where('radius')) ?? host.w / 2)
+              : host.kind === 'ring'
+                ? host.w / 2
+                : host.w / 2 + px(18);
+          const toRad = (deg: number) => (-deg * Math.PI) / 180;
+          points = arc(host.center, r, toRad(a0), toRad(a1), a1 < a0, scale);
+          linkOf(spec.along);
+        }
+      } else {
       const sideFrom =
         typeof spec.from === 'string' && (SIDES as readonly string[]).includes(spec.from)
           ? (spec.from as Side)
@@ -1282,6 +1362,7 @@ export function resolveDiagram(input: ResolveInput): Resolved {
           points = [start, add(start, mul(d, length))];
         }
       }
+      }
     } else {
       report(where(key), `${key} is a list of points, or an object ({"from", "dir", "length"} ...)`);
       points = [[0, 0], [1, 0]];
@@ -1311,6 +1392,7 @@ export function resolveDiagram(input: ResolveInput): Resolved {
       rotation: 0,
       points,
       ...(key === 'arrow' ? {arrow: true} : {}),
+      ...(vector ? {vector: true} : {}),
       ...(raw.dashed === true ? {dashed: true} : {}),
       ...(key === 'ray' && raw.back === true ? {back: true} : {}),
       ...(color ? {color} : {}),

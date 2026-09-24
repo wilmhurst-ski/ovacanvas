@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention -- point names are capital letters */
 import {describe, expect, it} from 'vitest';
-import {generateBeatSource} from '../codegen/generate.js';
 import {timelineDuration, walkSteps} from '../document/analysis.js';
 import type {SceneDocument} from '../document/model.js';
 import {prepareDocument} from './expand.js';
@@ -164,11 +163,28 @@ describe('the graph kit', () => {
     }
   });
 
-  it('lets an arrow reach the label inside the node it attaches to', () => {
-    const source = generateBeatSource(doc([cycle])).source;
-    expect(source).toMatch(
-      /id: "cycle_tsea".*"cycle_e0", "connector cycle_e0 arrives at cycle_nsea/,
-    );
+  it('runs a cycle round its ring, stopping short of each node', () => {
+    const d = expanded(doc([cycle]));
+    const edge = d.nodes.find(n => n.id === 'cycle_e0')!;
+    const points = edge.props!.points as number[][];
+    // A ring, not a chord: many points, bowed outward from the straight line.
+    expect(points.length).toBeGreaterThan(10);
+    const [x0, y0] = points[0];
+    const [x1, y1] = points[points.length - 1];
+    const [xm, ym] = points[Math.floor(points.length / 2)];
+    const offset =
+      Math.abs((x1 - x0) * (y0 - ym) - (x0 - xm) * (y1 - y0)) /
+      Math.hypot(x1 - x0, y1 - y0);
+    expect(offset).toBeGreaterThan(20);
+    // It stops a gap short of the node it leaves, and is allowed to touch it.
+    const sea = d.nodes.find(n => n.id === 'cycle_nsea')!;
+    const [sx, sy] = sea.props!.position as number[];
+    const [sw, sh] = sea.props!.size as number[];
+    const clear = Math.abs(x0 - sx) > sw / 2 || Math.abs(y0 - sy) > sh / 2;
+    expect(clear).toBe(true);
+    expect(
+      d.touches?.some(t => t.a === 'cycle_e0' && t.b === 'cycle_nsea'),
+    ).toBe(true);
   });
 });
 

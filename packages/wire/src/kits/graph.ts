@@ -12,10 +12,27 @@ import {
   placementBox,
   textWidth,
 } from './fields.js';
+import {
+  arc,
+  arrowProps,
+  curve,
+  pathsCross,
+  rounded,
+  smooth,
+  trim,
+  type End,
+} from './connect.js';
 import {checkIconName} from './icon.js';
 import type {KitExpansion, KitNode, KitPart, KitSpec} from './types.js';
 
-const FIELDS = ['nodes', 'edges', 'layout', 'shape', ...PLACEMENT_FIELDS];
+const FIELDS = [
+  'nodes',
+  'edges',
+  'layout',
+  'shape',
+  'curve',
+  ...PLACEMENT_FIELDS,
+];
 const LAYOUTS = ['flow', 'tree', 'cycle', 'hub', 'grid'] as const;
 const SHAPES = ['box', 'circle', 'pill'] as const;
 const NODE_ID = /^[A-Za-z][A-Za-z0-9]{0,23}$/;
@@ -38,7 +55,11 @@ interface GraphEdge {
   to: string;
   label?: string;
   dashed: boolean;
+  /** How far the edge bows sideways, as a fraction of its length. */
+  bend?: number;
 }
+
+const CURVES = ['auto', 'straight', 'curved'] as const;
 
 // Edge forms: "a->b", "a -> b: label", "a--b" (no arrow head), "a..>b" (dashed).
 const EDGE =
@@ -155,12 +176,15 @@ function parse(
           arrow: item.arrow !== false,
           dashed: item.dashed === true,
           ...(typeof item.label === 'string' ? {label: item.label} : {}),
+          ...(typeof item.bend === 'number' && Number.isFinite(item.bend)
+            ? {bend: Math.max(-1, Math.min(1, item.bend))}
+            : {}),
         };
       }
       if (!parsed) {
         errors?.error(
           'edges',
-          `edge ${JSON.stringify(item)} is not "a->b", "a--b", "a..>b" or "a->b: label"`,
+          `edge ${JSON.stringify(item)} is not "a->b", "a--b", "a..>b", "a->b: label" or {"from", "to", "label"?, "bend"?}`,
         );
         continue;
       }
@@ -197,6 +221,14 @@ function nodeSize(n: GraphNode): [number, number] {
 
 type Vec = [number, number];
 
+/** Edge routes and label spots a layout worked out, by edge index. */
+interface LaidOut {
+  readonly points: Map<number, Vec[]>;
+  readonly labels: Map<number, Vec>;
+}
+
+const ROUTED = new WeakMap<Map<string, Vec>, LaidOut>();
+
 function layout(
   kind: string,
   nodes: GraphNode[],
@@ -205,24 +237,60 @@ function layout(
 ): Map<string, Vec> {
   const positions = new Map<string, Vec>();
   if (kind === 'flow' || kind === 'tree') {
-    const g = new dagre.graphlib.Graph();
+    // A multigraph, so two edges between the same nodes each get a route;
+    // each label is given its size, so the layout leaves room for it.
+    const g = new dagre.graphlib.Graph({multigraph: true});
     const labelled = edges.some(e => e.label);
     g.setGraph({
       rankdir: kind === 'flow' ? 'LR' : 'TB',
       nodesep: Math.round((labelled ? 90 : 60) * spacing),
       ranksep: Math.round((labelled ? 170 : 110) * spacing),
+      edgesep: 30,
     });
     g.setDefaultEdgeLabel(() => ({}));
     for (const n of nodes) {
       const [width, height] = nodeSize(n);
       g.setNode(n.id, {width, height});
     }
-    for (const e of edges) g.setEdge(e.from, e.to);
+    edges.forEach((e, index) => {
+      g.setEdge(
+        e.from,
+        e.to,
+        // A flow's labels are given room by the layout (a tree places its
+        // own, beside each drop).
+        e.label && kind === 'flow'
+          ? {
+              width: textWidth(e.label, EDGE_LABEL_SIZE) + 40,
+              height: EDGE_LABEL_SIZE * 1.3 + 30,
+              labelpos: 'r',
+              labeloffset: 16,
+            }
+          : {},
+        String(index),
+      );
+    });
     dagre.layout(g);
     for (const n of nodes) {
       const p = g.node(n.id) as {x: number; y: number};
       positions.set(n.id, [p.x, p.y]);
     }
+    const points = new Map<number, Vec[]>();
+    const labels = new Map<number, Vec>();
+    edges.forEach((e, index) => {
+      const laid = g.edge({v: e.from, w: e.to, name: String(index)}) as
+        | {points?: {x: number; y: number}[]; x?: number; y?: number}
+        | undefined;
+      if (laid?.points?.length) {
+        points.set(
+          index,
+          laid.points.map(q => [q.x, q.y] as Vec),
+        );
+      }
+      if (e.label && typeof laid?.x === 'number' && typeof laid.y === 'number') {
+        labels.set(index, [laid.x, laid.y]);
+      }
+    });
+    ROUTED.set(positions, {points, labels});
   } else if (kind === 'cycle' || kind === 'hub') {
     const ring = kind === 'hub' ? nodes.slice(1) : nodes;
     if (kind === 'hub') positions.set(nodes[0].id, [0, 0]);
@@ -283,30 +351,6 @@ function segmentHitsRect(p: Vec, q: Vec, r: Rect): boolean {
   return true;
 }
 
-function segmentsCross(p1: Vec, p2: Vec, p3: Vec, p4: Vec): boolean {
-  const d = (a: Vec, b: Vec, c: Vec) =>
-    (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
-  return d(p3, p4, p1) * d(p3, p4, p2) < 0 && d(p1, p2, p3) * d(p1, p2, p4) < 0;
-}
-
-/** The middle of one side of a box centred at `centre`. */
-function sidePoint(centre: Vec, size: Vec, side: string): Vec {
-  const [w, h] = size;
-  if (side === 'right') return [centre[0] + w / 2, centre[1]];
-  if (side === 'left') return [centre[0] - w / 2, centre[1]];
-  if (side === 'top') return [centre[0], centre[1] - h / 2];
-  return [centre[0], centre[1] + h / 2];
-}
-
-/** The side of a box facing a direction, as an anchor side name. */
-function sideToward(dx: number, dy: number): string {
-  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-  if (angle > -45 && angle <= 45) return 'right';
-  if (angle > 45 && angle <= 135) return 'bottom';
-  if (angle > -135 && angle <= -45) return 'top';
-  return 'left';
-}
-
 export const graph: KitSpec = {
   name: 'graph',
   summary:
@@ -328,6 +372,10 @@ export const graph: KitSpec = {
     shape: {
       type: '"box" | "circle" | "pill"',
       doc: 'Node shape (default box); a node can override it.',
+    },
+    curve: {
+      type: '"auto" | "straight" | "curved"',
+      doc: 'How edges run. auto (default): a cycle runs round its ring as arcs, two edges between the same nodes curve apart, a box in the way is passed smoothly; curved: every edge bows gently; straight: straight lines. An edge can set its own {"from", "to", "bend": 0.3} (+ bows left, - right).',
     },
     region: {
       type: 'full | left | right | center | top | bottom',
@@ -367,6 +415,12 @@ export const graph: KitSpec = {
       !(SHAPES as readonly string[]).includes(String(node.shape))
     ) {
       errors.error('shape', `shape must be one of ${SHAPES.join(', ')}`);
+    }
+    if (
+      node.curve !== undefined &&
+      !(CURVES as readonly string[]).includes(String(node.curve))
+    ) {
+      errors.error('curve', `curve must be one of ${CURVES.join(', ')}`);
     }
     parse(node, errors);
     return errors.issues;
@@ -429,6 +483,17 @@ export const graph: KitSpec = {
         ],
       ]),
     );
+    const toStage = (q: Vec): Vec => [
+      box.x + (q[0] - cx) * scale,
+      box.y + (q[1] - cy) * scale,
+    ];
+    const laidOut = ROUTED.get(raw);
+    const laidPoints = new Map(
+      [...(laidOut?.points ?? [])].map(([k, pts]) => [k, pts.map(toStage)]),
+    );
+    const laidLabels = new Map(
+      [...(laidOut?.labels ?? [])].map(([k, q]) => [k, toStage(q)]),
+    );
 
     // A diagram shrunk to fit its box shrinks whole: boxes, type and icons
     // with the spacing, or its boxes would overlap.
@@ -480,34 +545,154 @@ export const graph: KitSpec = {
           h: r.h + 2 * CLEAR,
         });
       });
-    const detoured = new Set<number>();
+    // Every edge as the path it is drawn along (`paths`), and a coarse copy
+    // of it (`routes`) for keeping boxes and labels clear.
+    const endOf = (n: string): End => {
+      const node = nodes.find(x => x.id === n)!;
+      const [w, h] = sizes.get(n)!;
+      return node.shape === 'circle'
+        ? {kind: 'circle', c: at.get(n)!, r: w / 2}
+        : {kind: 'box', c: at.get(n)!, w, h};
+    };
+    const curveStyle = typeof node.curve === 'string' ? node.curve : 'auto';
+    // The ring a cycle (or a hub's rim) is laid out on.
+    const ringNodes =
+      kind === 'cycle' ? nodes : kind === 'hub' ? nodes.slice(1) : [];
+    const ringIndex = new Map(ringNodes.map((n, i) => [n.id, i]));
+    const ringCentre: Vec =
+      kind === 'hub' && nodes.length
+        ? at.get(nodes[0].id)!
+        : ringNodes.length
+          ? [
+              ringNodes.reduce((sum, n) => sum + at.get(n.id)![0], 0) /
+                ringNodes.length,
+              ringNodes.reduce((sum, n) => sum + at.get(n.id)![1], 0) /
+                ringNodes.length,
+            ]
+          : [0, 0];
+    /** How far short of a box an arrow stops. */
+    const GAP = 10;
+    const coarse = (path: Vec[]): Vec[] =>
+      path.length <= 8
+        ? path
+        : [0, 1, 2, 3, 4, 5, 6].map(
+            k => path[Math.round((k * (path.length - 1)) / 6)],
+          );
+    const paths: Vec[][] = [];
+    /** Edges drawn along the layout's own route (and so by its label room). */
+    const followsLayout = new Set<number>();
     const routes: Vec[][] = edges.map((e, index) => {
       const a = at.get(e.from)!;
       const b = at.get(e.to)!;
+      const done = (path: Vec[]) => {
+        paths[index] = path;
+        return coarse(path);
+      };
       if (orthogonal && top(e.to) > bottom(e.from)) {
         const y = busY.get(e.from)!;
-        return Math.abs(a[0] - b[0]) < 1
-          ? [
-              [a[0], bottom(e.from)],
-              [b[0], top(e.to)],
-            ]
-          : [
-              [a[0], bottom(e.from)],
-              [a[0], y],
-              [b[0], y],
-              [b[0], top(e.to)],
-            ];
+        const arrive: Vec = [b[0], top(e.to) - (e.arrow ? GAP - 4 : 0)];
+        const legs: Vec[] =
+          Math.abs(a[0] - b[0]) < 1
+            ? [[a[0], bottom(e.from)], arrive]
+            : [[a[0], bottom(e.from)], [a[0], y], [b[0], y], arrive];
+        paths[index] = legs;
+        return legs;
       }
-      const fromSide = sideToward(b[0] - a[0], b[1] - a[1]);
-      const toSide = sideToward(a[0] - b[0], a[1] - b[1]);
-      const straight: Vec[] = [
-        sidePoint(a, sizes.get(e.from)!, fromSide),
-        sidePoint(b, sizes.get(e.to)!, toSide),
-      ];
-      if (!blocked(straight, e.from, e.to)) return straight;
-      // A box stands in the way (a grid row, a cycle's far side): bend
-      // around it through the nearest clear point beside the straight line,
-      // leaving and arriving on the sides that face the bend.
+      const from = endOf(e.from);
+      const to = endOf(e.to);
+      // Neighbours on a ring go round it, so a cycle reads as a circle.
+      if (
+        curveStyle !== 'straight' &&
+        e.bend === undefined &&
+        ringIndex.has(e.from) &&
+        ringIndex.has(e.to)
+      ) {
+        const n = ringNodes.length;
+        const forward =
+          (ringIndex.get(e.to)! - ringIndex.get(e.from)! + n) % n;
+        if (forward === 1 || forward === n - 1) {
+          const angle = (p: Vec) =>
+            Math.atan2(p[1] - ringCentre[1], p[0] - ringCentre[0]);
+          const radius =
+            (Math.hypot(a[0] - ringCentre[0], a[1] - ringCentre[1]) +
+              Math.hypot(b[0] - ringCentre[0], b[1] - ringCentre[1])) /
+            2;
+          const path = trim(
+            arc(ringCentre, radius, angle(a), angle(b), forward === 1),
+            from,
+            to,
+            GAP,
+          );
+          if (!blocked(coarse(path), e.from, e.to)) return done(path);
+        }
+      }
+      // Two edges between the same nodes bow apart; "curved" bows them all.
+      const back = edges.some(x => x.from === e.to && x.to === e.from);
+      // A flow's edge follows the route the layout gave it, round the boxes
+      // in its way and through the room kept for its label - smoothed.
+      const laid = laidPoints.get(index);
+      // How far the laid route strays from the straight line (a pair of
+      // edges the layout already set apart, or one passing round a box).
+      const strays = (laid ?? []).reduce((most, q) => {
+        const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        const off = Math.abs(
+          ((b[0] - a[0]) * (a[1] - q[1]) - (a[0] - q[0]) * (b[1] - a[1])) / l,
+        );
+        return Math.max(most, off);
+      }, 0);
+      if (
+        kind === 'flow' &&
+        laid &&
+        laid.length >= 3 &&
+        (!back || strays > 20) &&
+        e.bend === undefined &&
+        curveStyle !== 'straight'
+      ) {
+        // A route bowing one way becomes one clean bow as deep as the
+        // layout's; one winding round several boxes is smoothed through.
+        const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        const sides = laid.slice(1, -1).map(
+          q => ((b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0])) / l,
+        );
+        const oneWay = sides.every(v => v >= -4) || sides.every(v => v <= 4);
+        const deepest = sides.reduce((m, v) => (Math.abs(v) > Math.abs(m) ? v : m), 0);
+        // A quadratic's middle lies half as far out as its control point.
+        const through = [a, ...laid.slice(1, -1), b];
+        const path = trim(
+          oneWay ? curve(a, b, (-2 * deepest) / l) : smooth(through),
+          from,
+          to,
+          GAP,
+        );
+        if (!blocked(coarse(path), e.from, e.to)) {
+          followsLayout.add(index);
+          return done(path);
+        }
+      }
+      const bend =
+        e.bend ??
+        (curveStyle === 'straight'
+          ? 0
+          : back
+            ? 0.2
+            : curveStyle === 'curved'
+              ? 0.15
+              : 0);
+      const direct = trim(bend ? curve(a, b, bend) : [a, b], from, to, GAP);
+      if (!blocked(coarse(direct), e.from, e.to)) return done(direct);
+      // A box in the way: bow further round it, either side, before
+      // bending through a point.
+      if (e.bend === undefined && curveStyle !== 'straight') {
+        const side = bend >= 0 ? 1 : -1;
+        for (const k of [0.3, 0.42, 0.55]) {
+          for (const sign of [side, -side]) {
+            const bowed = trim(curve(a, b, k * sign), from, to, GAP);
+            if (!blocked(bowed, e.from, e.to)) return done(bowed);
+          }
+        }
+      }
+      // A box stands in the way (a grid row, a cycle's far side): pass it
+      // smoothly, through the nearest clear point beside the straight line.
       const length = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
       const normal: Vec = [-(b[1] - a[1]) / length, (b[0] - a[0]) / length];
       const mid: Vec = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
@@ -517,77 +702,55 @@ export const graph: KitSpec = {
             mid[0] + normal[0] * d * sign,
             mid[1] + normal[1] * d * sign,
           ];
-          const route: Vec[] = [
-            sidePoint(
-              a,
-              sizes.get(e.from)!,
-              sideToward(w[0] - a[0], w[1] - a[1]),
-            ),
-            w,
-            sidePoint(
-              b,
-              sizes.get(e.to)!,
-              sideToward(w[0] - b[0], w[1] - b[1]),
-            ),
-          ];
-          if (!blocked(route, e.from, e.to)) {
-            detoured.add(index);
-            return route;
-          }
+          const path = trim(smooth([a, w, b]), from, to, GAP);
+          if (!blocked(coarse(path), e.from, e.to)) return done(path);
         }
       }
-      return straight;
+      return done(direct);
     });
     const placedLabels: {x: number; y: number; w: number; h: number}[] = [];
 
     // Edges first, under the nodes.
-    const edgeLines: {id: string; a: Vec; b: Vec; from: string; to: string}[] =
+    const edgeLines: {id: string; path: Vec[]; from: string; to: string}[] =
       [];
     edges.forEach((e, index) => {
-      const a = at.get(e.from)!;
-      const b = at.get(e.to)!;
       const lineId = `${id}_e${index}`;
-      const fromSide = sideToward(b[0] - a[0], b[1] - a[1]);
-      const toSide = sideToward(a[0] - b[0], a[1] - b[1]);
+      const path = paths[index];
       const route = routes[index];
       out.push({
         id: lineId,
         component: 'Line',
         props: {
-          points:
-            orthogonal || detoured.has(index)
-              ? route.map(([x, y]) => [Math.round(x), Math.round(y)])
-              : [
-                  {ref: shapeId(e.from), side: fromSide},
-                  {ref: shapeId(e.to), side: toSide},
-                ],
-          ...(detoured.has(index) ? {radius: 40} : {}),
+          points: rounded(path),
           stroke: {theme: 'ink'},
-          lineWidth: 3,
-          ...(e.arrow ? {endArrow: true, arrowSize: 16} : {}),
+          ...arrowProps('normal', e.arrow),
+          // A tree's elbows turn softly.
+          ...(orthogonal && path.length > 2 ? {radius: 12} : {}),
           ...(e.dashed ? {lineDash: [10, 8]} : {}),
         },
       });
-      edgeLines.push({id: lineId, a, b, from: e.from, to: e.to});
-      if (orthogonal || detoured.has(index)) {
-        // Drawn from fixed points, so the boxes it joins are named here.
-        for (const end of [e.from, e.to]) {
-          touches.push({
-            a: lineId,
-            b: shapeId(end),
-            reason: 'the arrow joins this box',
-          });
-        }
+      edgeLines.push({id: lineId, path, from: e.from, to: e.to});
+      for (const end of [e.from, e.to]) {
+        touches.push({
+          a: lineId,
+          b: shapeId(end),
+          reason: 'the arrow joins this box',
+        });
       }
       const partNodes = [lineId];
       if (e.label) {
         // Measured on the arrow as drawn: first beside the leg arriving at
         // the target (the whole edge when it is straight), then beside its
         // earlier legs - a tree's bar - when the last leg is too short.
-        const legs = route
-          .slice(1)
-          .map((pb, k) => ({pa: route[k], pb, k}))
-          .reverse();
+        // A curve is labelled at its middle first, then toward its ends.
+        const legList = route.slice(1).map((pb, k) => ({pa: route[k], pb, k}));
+        const middle = (legList.length - 1) / 2;
+        const legs =
+          route.length > 4
+            ? [...legList].sort(
+                (x, y) => Math.abs(x.k - middle) - Math.abs(y.k - middle),
+              )
+            : legList.reverse();
         // A label is tried on one line, then - when no spot is clear -
         // wrapped onto two, which fits between edges a single line cannot.
         const words = e.label.split(/\s+/);
@@ -603,7 +766,26 @@ export const graph: KitSpec = {
         let best: {spot: Vec; lines: string[]; w: number; h: number} | null =
           null;
         let fewest = Infinity;
-        search: for (const lines of forms) {
+        // The room the layout kept for this label, if it is still clear.
+        const kept = followsLayout.has(index) ? laidLabels.get(index) : undefined;
+        if (kept) {
+          const labelWidth = textWidth(e.label, edgeLabelSize) + edgeLabelSize * 0.2;
+          const rect = {
+            x: kept[0],
+            y: kept[1],
+            w: labelWidth + 30,
+            h: lineHeight + edgeLabelSize * 0.1 + 30,
+          };
+          const conflicts =
+            nodeRects.filter(r => rectsOverlap(rect, r)).length +
+            placedLabels.filter(r => rectsOverlap(rect, r)).length +
+            paths.filter(other => routeHitsRect(other, rect)).length;
+          if (conflicts === 0) {
+            fewest = 0;
+            best = {spot: kept, lines: [e.label], w: rect.w, h: rect.h};
+          }
+        }
+        search: for (const lines of fewest === 0 ? [] : forms) {
           // Measured, plus the overhang the audit allows either side.
           const labelWidth =
             Math.max(...lines.map(l => textWidth(l, edgeLabelSize))) +
@@ -635,8 +817,15 @@ export const graph: KitSpec = {
             // The middle first, then toward either end, on either side: where
             // edges fan out of one node the middles crowd together; further
             // along, they spread apart.
+            // Outside a ring before inside it: the side away from the middle
+            // of the diagram first.
+            const midLeg: Vec = [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2];
+            const outward =
+              (midLeg[0] - box.x) * normal[0] + (midLeg[1] - box.y) * normal[1] >= 0
+                ? 1
+                : -1;
             for (const t of [0.5, 0.62, 0.38, 0.72, 0.28, 0.8, 0.2]) {
-              for (const sign of [1, -1]) {
+              for (const sign of [outward, -outward]) {
                 const cx =
                   pa[0] + (pb[0] - pa[0]) * t + normal[0] * offset * sign;
                 const cy =
@@ -655,9 +844,11 @@ export const graph: KitSpec = {
                   (outside ? 3 : 0) +
                   3 * nodeRects.filter(r => rectsOverlap(rect, r)).length +
                   2 * placedLabels.filter(r => rectsOverlap(rect, r)).length +
-                  routes.filter(
+                  paths.filter(
                     (other, k) => k !== index && routeHitsRect(other, rect),
                   ).length +
+                  // Its own curve, as drawn, away from this leg.
+                  (route.length > 4 && routeHitsRect(path, rect) ? 1 : 0) +
                   ownOthers.filter(([p, q]) => segmentHitsRect(p, q, rect))
                     .length;
                 // A wrapped label must do strictly better to be chosen.
@@ -687,17 +878,22 @@ export const graph: KitSpec = {
           const w =
             textWidth(e.label, edgeLabelSize) + edgeLabelSize * 0.2 + 12;
           const h = lineHeight + 6;
-          const spot: Vec = [
-            (longest.pa[0] + longest.pb[0]) / 2,
-            (longest.pa[1] + longest.pb[1]) / 2,
-          ];
-          const rect = {x: spot[0], y: spot[1], w: w + 24, h: h + 24};
-          const clear =
-            !nodeRects.some(r => rectsOverlap(rect, r)) &&
-            !placedLabels.some(r => rectsOverlap(rect, r));
-          if (clear) {
-            chosen = {spot, lines, w: rect.w, h: rect.h};
-            onLine = true;
+          // Along its own edge, where no box, label or other edge is.
+          for (const t of [0.5, 0.35, 0.65, 0.25, 0.75]) {
+            const spot: Vec = [
+              longest.pa[0] + (longest.pb[0] - longest.pa[0]) * t,
+              longest.pa[1] + (longest.pb[1] - longest.pa[1]) * t,
+            ];
+            const rect = {x: spot[0], y: spot[1], w: w + 24, h: h + 24};
+            const clear =
+              !nodeRects.some(r => rectsOverlap(rect, r)) &&
+              !placedLabels.some(r => rectsOverlap(rect, r)) &&
+              !paths.some((other, k) => k !== index && routeHitsRect(other, rect));
+            if (clear) {
+              chosen = {spot, lines, w: rect.w, h: rect.h};
+              onLine = true;
+              break;
+            }
           }
         }
         const patchId = `${id}_l${index}bg`;
@@ -781,7 +977,7 @@ export const graph: KitSpec = {
         const p = edgeLines[i];
         const q = edgeLines[j];
         const shared = [p.from, p.to].some(n => n === q.from || n === q.to);
-        if (shared || segmentsCross(p.a, p.b, q.a, q.b)) {
+        if (shared || pathsCross(p.path, q.path)) {
           touches.push({
             a: p.id,
             b: q.id,

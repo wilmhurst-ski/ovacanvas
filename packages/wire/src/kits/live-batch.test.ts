@@ -47,11 +47,14 @@ describe('live batch layout fixes', () => {
     });
     const edge = nodes.get('g_e1')!;
     const points = edge.props!.points as number[][];
-    expect(points).toHaveLength(3);
-    // The bend clears the middle box.
+    // The edge passes the middle box smoothly, never through it.
     const middle = rectOf(nodes.get('g_nb')!);
-    const [, bend] = points;
-    expect(bend[1] < middle.y0 || bend[1] > middle.y1).toBe(true);
+    for (const [x, y] of points) {
+      const inside =
+        x > middle.x0 && x < middle.x1 && y > middle.y0 && y < middle.y1;
+      expect(inside).toBe(false);
+    }
+    expect(points.length).toBeGreaterThan(3);
   });
 
   it('keeps an explicit box inside the safe area', () => {
